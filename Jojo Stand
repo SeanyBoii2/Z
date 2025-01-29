@@ -1,0 +1,131 @@
+local p = game:GetService("Players")
+local r = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local lp = p.LocalPlayer
+local char = lp.Character or lp.CharacterAdded:Wait()
+local t = false
+local fConn = nil
+local tE = false
+local tK = Enum.KeyCode.V
+local floatName = "FloatingPart" -- Name of the floating part
+
+-- Animation setup
+local Anim = Instance.new("Animation")
+Anim.AnimationId = "rbxassetid://313762630"
+local humanoid = char:WaitForChild("Humanoid")
+local animator = humanoid:FindFirstChild("Animator") or Instance.new("Animator", humanoid)
+local track = animator:LoadAnimation(Anim)
+
+-- Function to create the floating part
+local function createFloatingPart()
+    if char and not char:FindFirstChild(floatName) then
+        local Float = Instance.new('Part')
+        Float.Name = floatName
+        Float.Parent = char
+        Float.Transparency = 1
+        Float.Size = Vector3.new(2, 0.2, 1.5)  -- Adjust size as needed
+        Float.Anchored = true
+        local FloatValue = -3.1  -- Vertical offset to make the character float
+        Float.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, FloatValue, 0)
+    end
+end
+
+-- Function to remove the floating part
+local function removeFloatingPart()
+    local floatPart = char:FindFirstChild(floatName)
+    if floatPart then
+        floatPart:Destroy()  -- Remove the floating part
+    end
+end
+
+-- Function to handle floating movement
+local function f(trgHRP)
+    if fConn then fConn:Disconnect() end
+    fConn = r.RenderStepped:Connect(function()
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            -- Make the character move in the air by adjusting its position based on the target's position
+            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, 0, 3)  -- Adjust as needed
+        end
+    end)
+end
+
+local function u()
+    if fConn then fConn:Disconnect() fConn = nil end
+    track:Stop()
+end
+
+local function tpF(trg)
+    if t then return end
+    t = true
+    local trgChar = trg.Character
+    if not trgChar then return end
+    local trgHRP = trgChar:FindFirstChild("HumanoidRootPart")
+    local trgHum = trgChar:FindFirstChild("Humanoid")
+    if trgHRP and trgHum then
+        char:MoveTo(trgHRP.Position + trgHRP.CFrame.LookVector * -5)
+        f(trgHRP)
+        track:Play(0.1, 1, 1)  -- Play animation
+        trgHum.Died:Connect(function()
+            wait()
+            u()
+            t = false
+            cP()
+        end)
+    else
+        u()
+        t = false
+    end
+end
+
+local function cP()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    for _, plr in pairs(p:GetPlayers()) do
+        if plr ~= lp then
+            local trgChar = plr.Character
+            if trgChar then
+                local trgHRP = trgChar:FindFirstChild("HumanoidRootPart")
+                local trgHum = trgChar:FindFirstChild("Humanoid")
+                if trgHRP and trgHum and trgHum.Health > 0 then
+                    local dist = (hrp.Position - trgHRP.Position).Magnitude
+                    if dist <= 12 then
+                        tpF(plr)
+                        return
+                    end
+                end
+            end
+        end
+    end
+    u()
+end
+
+local function tT()
+    tE = not tE
+    if tE then
+        createFloatingPart()  -- Create floating part when toggled on
+        r.RenderStepped:Connect(function()
+            if tE and not t then
+                cP()
+            end
+        end)
+    else
+        removeFloatingPart()  -- Remove floating part when toggled off
+        u()
+        t = false
+    end
+end
+
+uis.InputBegan:Connect(function(input)
+    if input.KeyCode == tK then
+        tT()
+    end
+end)
+
+lp.CharacterAdded:Connect(function(newChar)
+    char = newChar
+    -- Reset the state when a new character is added
+    if tE then
+        createFloatingPart()  -- Recreate the floating part if the effect was on
+    end
+end)
