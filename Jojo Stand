@@ -8,6 +8,8 @@ local fConn = nil
 local tE = false  -- Ensure toggle is off initially
 local tK = Enum.KeyCode.C
 local floatName = "FloatingPart"  -- Name of the floating part
+local magnetAnimationId = "rbxassetid://14611804638"
+local currentAnimTrack = nil  -- To keep track of the current animation
 
 -- Function to create the floating part
 local function createFloatingPart(char)
@@ -87,6 +89,7 @@ local function cP(char)
     end
 end
 
+-- Function to toggle floating and animation
 local function tT(char)
     tE = not tE
     if tE then
@@ -97,6 +100,16 @@ local function tT(char)
                 cP(char)
             end
         end)
+
+        -- Start the magnet animation in a loop when the toggle is on
+        if not currentAnimTrack then
+            local humanoid = char:WaitForChild("Humanoid")
+            local magnetAnimation = Instance.new("Animation")
+            magnetAnimation.AnimationId = magnetAnimationId
+            currentAnimTrack = humanoid:LoadAnimation(magnetAnimation)
+            currentAnimTrack.Looped = true
+            currentAnimTrack:Play()
+        end
     else
         removeFloatingPart(char)
         if fConn then
@@ -104,8 +117,25 @@ local function tT(char)
             fConn = nil
         end
         t = false
+
+        -- Stop the magnet animation when the toggle is off
+        if currentAnimTrack then
+            currentAnimTrack:Stop()
+            currentAnimTrack = nil
+        end
     end
 end
+
+-- Function to check if animation has stopped and restart if necessary
+local function checkAnimation()
+    if tE and currentAnimTrack and not currentAnimTrack.IsPlaying then
+        -- If animation isn't playing and toggle is on, restart it
+        currentAnimTrack:Play()
+    end
+end
+
+-- Monitor the animation and restart it if interrupted
+r.RenderStepped:Connect(checkAnimation)
 
 uis.InputBegan:Connect(function(input)
     if input.KeyCode == tK then
