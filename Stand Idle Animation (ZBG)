@@ -1,0 +1,35 @@
+local player = game.Players.LocalPlayer
+
+local function setupCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid")
+
+    -- Load the custom idle animation
+    local animationId = "rbxassetid://14611804638"
+    local customIdleAnimation = Instance.new("Animation")
+    customIdleAnimation.AnimationId = animationId
+
+    -- Load the animation into the humanoid
+    local idleTrack = humanoid:LoadAnimation(customIdleAnimation)
+
+    -- Play the animation in a loop
+    idleTrack.Looped = true
+    idleTrack:Play()
+
+    -- Optional: Stop the default idle animation
+    humanoid.Running:Connect(function(speed)
+        if speed > 0 then
+            idleTrack:Stop() -- Stop the custom idle animation when moving
+        else
+            idleTrack:Play() -- Resume the custom idle animation when standing still
+        end
+    end)
+end
+
+-- Set up the character when it's first added
+local character = player.Character or player.CharacterAdded:Wait()
+setupCharacter(character)
+
+-- Set up the character again when the player respawns
+player.CharacterAdded:Connect(function(newCharacter)
+    setupCharacter(newCharacter)
+end)
