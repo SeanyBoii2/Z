@@ -1,41 +1,58 @@
 -- Table to map old animation IDs to new animation IDs
 local animationMap = {
-    ["rbxassetid://14996795850"] = "rbxassetid://13581276184",
-    ["rbxassetid://anotherOldAnimationId"] = "rbxassetid://newAnimationId1",
-    ["rbxassetid://yetAnotherOldAnimationId"] = "rbxassetid://newAnimationId2",
-    -- Add more animations as needed
+    ["rbxassetid://15450941296"] = "rbxassetid://14580198532", -- Front Dash
+    ["rbxassetid://15450949109"] = "rbxassetid://14693813660", -- Front Dash Punch
+    ["rbxassetid://14996795850"] = "rbxassetid://14612002089", -- Burst Rush Start
+    ["rbxassetid://14986346989"] = "rbxassetid://14807224525", -- Burst Rush Attack
+    ["rbxassetid://15195065611"] = "rbxassetid://17305379007", -- Rising Impact Start
+    ["rbxassetid://15195201406"] = "rbxassetid://14612002089", -- Rising Impact Attack
+    ["rbxassetid://15783229134"] = "rbxassetid://15216656414", -- Rising Impact Finisher
+    ["rbxassetid://15254364213"] = "rbxassetid://13901381589", -- Boomin' Backhand
+    ["rbxassetid://15254641861"] = "rbxassetid://17322638472", -- Boomin' Backhand Attack
+    ["rbxassetid://15378119183"] = "rbxassetid://15529558446", -- Masenko
+    ["rbxassetid://15756873017"] = "rbxassetid://16069051348", -- Masenko Finisher
 }
 
--- Wait until the character is loaded
 local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-
--- Wait for the humanoid to be loaded
-local humanoid = character:WaitForChild("Humanoid")
 
 -- Function to replace animations
-local function replaceAnimations()
-    -- Loop through all animation tracks in the humanoid
+local function replaceAnimations(humanoid)
     for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
         local oldAnimationId = track.Animation.AnimationId
-        -- Check if the current animation ID is in the map and replace it
+        
         if animationMap[oldAnimationId] then
-            -- Stop the current animation and replace it with the new one
+            -- Stop the original animation before replacing it
             track:Stop()
             
-            -- Create a new animation with the new ID and play it
+            -- Create a new animation and set its ID
             local newAnimation = Instance.new("Animation")
             newAnimation.AnimationId = animationMap[oldAnimationId]
-            humanoid:LoadAnimation(newAnimation):Play()
+            
+            -- Load and play the new animation ONCE (no looping)
+            local newTrack = humanoid:LoadAnimation(newAnimation)
+            newTrack.Looped = false
+            newTrack:Play()
         end
     end
 end
 
--- Connect to the humanoid's animation played event
-humanoid.AnimationPlayed:Connect(function(track)
-    local oldAnimationId = track.Animation.AnimationId
-    -- Replace animation if the old one is in the map
-    if animationMap[oldAnimationId] then
-        replaceAnimations()
-    end
-end)
+-- Function to handle character loading & respawning
+local function onCharacterAdded(character)
+    local humanoid = character:WaitForChild("Humanoid")
+
+    -- Replace animations when they play
+    humanoid.AnimationPlayed:Connect(function(track)
+        local oldAnimationId = track.Animation.AnimationId
+        if animationMap[oldAnimationId] then
+            replaceAnimations(humanoid)
+        end
+    end)
+end
+
+-- Apply to the current character
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+-- Reapply logic after respawn
+player.CharacterAdded:Connect(onCharacterAdded)
