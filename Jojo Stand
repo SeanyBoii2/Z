@@ -9,27 +9,16 @@ local tE = false  -- Ensure toggle is off initially
 local tK = Enum.KeyCode.C
 local floatName = "FloatingPart"  -- Name of the floating part
 
--- Animation setup
-local Anim = Instance.new("Animation")
-Anim.AnimationId = "rbxassetid://313762630"
-local humanoid = char:WaitForChild("Humanoid")
-local animator = humanoid:FindFirstChild("Animator") or Instance.new("Animator", humanoid)
-local track = animator:LoadAnimation(Anim)
-
--- Ensure animation is stopped initially
-track:Stop()
-
 -- Function to create the floating part
 local function createFloatingPart(char)
     if char and not char:FindFirstChild(floatName) then
         local Float = Instance.new('Part')
         Float.Name = floatName
         Float.Parent = char
-        Float.Transparency = 1
-        Float.Size = Vector3.new(2, 0.2, 1)
+        Float.Transparency = 0.5
+        Float.Size = Vector3.new(3, 0.2, 3)
         Float.Anchored = true
-        local FloatValue = -3.1
-        Float.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, FloatValue, 0)
+        Float.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, -3.1, 0)
     end
 end
 
@@ -41,32 +30,19 @@ local function removeFloatingPart(char)
     end
 end
 
--- Function to handle floating movement
+-- Function to handle floating movement and staying behind a target player
 local function f(trgHRP, char)
     if fConn then fConn:Disconnect() end
     fConn = r.RenderStepped:Connect(function()
         local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, 0.5, 3)
+        local floatPart = char:FindFirstChild(floatName)
+        if hrp and floatPart then
+            floatPart.CFrame = hrp.CFrame * CFrame.new(0, -3.1, 0)
+        end
+        if trgHRP and hrp then
+            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, 2, 3.3)
         end
     end)
-end
-
--- Stop the animation
-local function stopAnimation()
-    if track.IsPlaying then
-        track:Stop()
-    end
-end
-
--- Ensure the animation keeps playing even if interrupted
-local function maintainAnimation()
-    while tE do
-        if not track.IsPlaying then
-            track:Play(0.1, 1, 1)
-        end
-        wait(0.1)
-    end
 end
 
 local function tpF(trg, char)
@@ -79,17 +55,13 @@ local function tpF(trg, char)
     if trgHRP and trgHum then
         char:MoveTo(trgHRP.Position + trgHRP.CFrame.LookVector * -5)
         f(trgHRP, char)
-        track:Play(0.1, 1, 1)  -- Only play animation if toggled on
-        coroutine.wrap(maintainAnimation)()  -- Start maintaining animation
 
         trgHum.Died:Connect(function()
             wait()
-            stopAnimation()
             t = false
             cP(char)
         end)
     else
-        stopAnimation()
         t = false
     end
 end
@@ -113,14 +85,13 @@ local function cP(char)
             end
         end
     end
-    stopAnimation()
 end
 
 local function tT(char)
     tE = not tE
     if tE then
         createFloatingPart(char)
-        coroutine.wrap(maintainAnimation)()  -- Keep animation playing
+        f(nil, char)
         r.RenderStepped:Connect(function()
             if tE and not t then
                 cP(char)
@@ -128,7 +99,6 @@ local function tT(char)
         end)
     else
         removeFloatingPart(char)
-        stopAnimation()  -- Ensure animation stops when toggled off
         if fConn then
             fConn:Disconnect()
             fConn = nil
@@ -145,15 +115,7 @@ end)
 
 lp.CharacterAdded:Connect(function(newChar)
     char = newChar
-    local humanoid = char:WaitForChild("Humanoid")
-    local animator = humanoid:FindFirstChild("Animator") or Instance.new("Animator", humanoid)
-    track = animator:LoadAnimation(Anim)
-
-    -- Stop the animation on respawn
-    stopAnimation()
-
     if tE then
         createFloatingPart(char)
-        coroutine.wrap(maintainAnimation)()  -- Ensure animation resumes
     end
 end)
