@@ -11,9 +11,9 @@ local animationMap = {
     ["rbxassetid://14986346989"] = "rbxassetid://14807224525", -- Burst Rush Attack
     ["rbxassetid://15195065611"] = "rbxassetid://17305379007", -- Rising Impact Start
     ["rbxassetid://15195201406"] = "rbxassetid://14612002089", -- Rising Impact Attack
-    ["rbxassetid://15783229134"] = "rbxassetid://15216656414", -- Rising Impact Finisher
+    ["rbxassetid://15783229134"] = "rbxassetid://14611572720", -- Rising Impact Finisher
     ["rbxassetid://15254364213"] = "rbxassetid://13901381589", -- Boomin' Backhand
-    ["rbxassetid://15254641861"] = "rbxassetid://17322638472", -- Boomin' Backhand Attack
+    ["rbxassetid://15254641861"] = "rbxassetid://15645552606", -- Boomin' Backhand Attack
     ["rbxassetid://15378119183"] = "rbxassetid://15529558446", -- Masenko
     ["rbxassetid://15756873017"] = "rbxassetid://16069051348", -- Masenko Finisher
 }
