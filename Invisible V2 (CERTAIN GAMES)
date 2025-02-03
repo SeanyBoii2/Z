@@ -1,6 +1,5 @@
 --// Button position and size variables
-local buttonSize = UDim2.new(0, 50, 0, 50) -- Small 50x50 button
-local buttonPosition = UDim2.new(1, -120, 0, 10) -- Left of the three dots button
+local buttonSize = UDim2.new(0, 0, 0, 0) -- Small 50x50 button
 
 --// don't edit script below
 local invis_on = false
@@ -35,7 +34,6 @@ local function initializeGUI()
     -- Button properties
     invisButton.Parent = screenGui
     invisButton.Size = buttonSize
-    invisButton.Position = buttonPosition
     invisButton.Text = ""
     invisButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black color
     invisButton.BackgroundTransparency = 0.5 -- Semi-transparent
