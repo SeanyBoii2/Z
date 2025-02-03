@@ -1,0 +1,22 @@
+local player = game.Players.LocalPlayer
+
+local function setupCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid")
+
+    -- Disable ragdoll by preventing the humanoid from entering the "Physics" state
+    humanoid.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Physics then
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end)
+end
+
+-- Set up the current character (if it exists)
+if player.Character then
+    setupCharacter(player.Character)
+end
+
+-- Set up the character every time the player respawns
+player.CharacterAdded:Connect(function(newCharacter)
+    setupCharacter(newCharacter)
+end)
