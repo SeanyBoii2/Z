@@ -1,0 +1,41 @@
+-- Table to map old animation IDs to new animation IDs
+local animationMap = {
+    ["rbxassetid://14996795850"] = "rbxassetid://13581276184",
+    ["rbxassetid://anotherOldAnimationId"] = "rbxassetid://newAnimationId1",
+    ["rbxassetid://yetAnotherOldAnimationId"] = "rbxassetid://newAnimationId2",
+    -- Add more animations as needed
+}
+
+-- Wait until the character is loaded
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- Wait for the humanoid to be loaded
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Function to replace animations
+local function replaceAnimations()
+    -- Loop through all animation tracks in the humanoid
+    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+        local oldAnimationId = track.Animation.AnimationId
+        -- Check if the current animation ID is in the map and replace it
+        if animationMap[oldAnimationId] then
+            -- Stop the current animation and replace it with the new one
+            track:Stop()
+            
+            -- Create a new animation with the new ID and play it
+            local newAnimation = Instance.new("Animation")
+            newAnimation.AnimationId = animationMap[oldAnimationId]
+            humanoid:LoadAnimation(newAnimation):Play()
+        end
+    end
+end
+
+-- Connect to the humanoid's animation played event
+humanoid.AnimationPlayed:Connect(function(track)
+    local oldAnimationId = track.Animation.AnimationId
+    -- Replace animation if the old one is in the map
+    if animationMap[oldAnimationId] then
+        replaceAnimations()
+    end
+end)
