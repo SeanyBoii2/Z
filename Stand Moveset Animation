@@ -1,8 +1,10 @@
 -- Table to map old animation IDs to new animation IDs
 local animationMap = {
-    ["rbxassetid://15656386291"] = "rbxassetid://14612002089", -- M1
-    ["rbxassetid://15656387531"] = "rbxassetid://14612002089", -- M2
-    ["rbxassetid://15656388830"] = "rbxassetid://14612002089", -- M3
+    ["rbxassetid://15656386291"] = "rbxassetid://17013755413", -- M1
+    ["rbxassetid://15656387531"] = "rbxassetid://15786413721", -- M2
+    ["rbxassetid://15656388830"] = "rbxassetid://13447308418", -- M3
+    ["rbxassetid://15656390092"] = "rbxassetid://14612002089", -- M4
+    ["rbxassetid://15862457362"] = "rbxassetid://14824686050", -- DownSlam
     ["rbxassetid://15450941296"] = "rbxassetid://14580198532", -- Front Dash
     ["rbxassetid://15450949109"] = "rbxassetid://14693813660", -- Front Dash Punch
     ["rbxassetid://14996795850"] = "rbxassetid://14612002089", -- Burst Rush Start
