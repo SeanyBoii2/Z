@@ -1,0 +1,6 @@
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+loadstring(game:HttpGet("https://pastebin.com/raw/kBui7A0r"))()
+
+-- open source you can steal it i dont really care
