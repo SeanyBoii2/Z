@@ -23,6 +23,15 @@ local function setupCharacter(character)
             idleTrack:Play() -- Resume the custom idle animation when standing still
         end
     end)
+
+    -- Listen to the humanoid state to ensure the idle animation is played correctly
+    humanoid.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Seated or newState == Enum.HumanoidStateType.Climbing then
+            idleTrack:Stop()  -- Stop idle animation when seated or climbing
+        elseif newState == Enum.HumanoidStateType.Physics then
+            idleTrack:Play()  -- Resume idle animation when in idle physics state
+        end
+    end)
 end
 
 -- Set up the character when it's first added
