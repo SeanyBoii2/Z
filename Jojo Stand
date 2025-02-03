@@ -47,7 +47,7 @@ local function f(trgHRP, char)
     fConn = r.RenderStepped:Connect(function()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if hrp then
-            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, 0, 3)
+            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, 0.5, 3)
         end
     end)
 end
