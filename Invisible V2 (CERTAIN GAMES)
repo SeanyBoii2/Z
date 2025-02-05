@@ -68,9 +68,27 @@ local function toggleInvisibility()
     if invis_on then
         setCharacterTransparency(0.5)
         local savedpos = character.HumanoidRootPart.CFrame
-        wait()
-        character:MoveTo(teleportPosition)
-        wait(0.1)
+
+        -- Velocity-based movement
+        local rootPart = character.HumanoidRootPart
+        local targetPosition = teleportPosition
+        local direction = (targetPosition - rootPart.Position).Unit
+        local speed = 500 -- Adjust speed as needed (higher = faster movement)
+        local distance = (targetPosition - rootPart.Position).Magnitude
+
+        -- Apply velocity to move the character
+        rootPart.Velocity = direction * speed
+
+        -- Wait until the character is close to the target position
+        while distance > 5 do -- Adjust threshold as needed
+            wait()
+            distance = (targetPosition - rootPart.Position).Magnitude
+        end
+
+        -- Stop movement
+        rootPart.Velocity = Vector3.new(0, 0, 0)
+
+        -- Create a seat and weld the character to it
         local Seat = Instance.new("Seat", workspace)
         Seat.Anchored = false
         Seat.CanCollide = false
@@ -82,6 +100,7 @@ local function toggleInvisibility()
         Weld.Part1 = character:FindFirstChild("Torso") or character.UpperTorso
         wait()
         Seat.CFrame = savedpos
+
         game.StarterGui:SetCore("SendNotification", {
             Title = "Invis On";
             Duration = 1;
