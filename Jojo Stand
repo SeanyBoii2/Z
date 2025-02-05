@@ -9,9 +9,10 @@ local tE = false  -- Ensure toggle is off initially
 local tK = Enum.KeyCode.C
 local floatName = "FloatingPart"  -- Name of the floating part
 
--- Determine the correct animation ID based on the PlaceId
+-- Determine the correct animation ID and Y-offset based on the PlaceId
 local placeId = game.PlaceId
 local magnetAnimationId = placeId == 13447209899 and "rbxassetid://14611804638" or "rbxassetid://313762630"
+local yOffset = placeId == 13447209899 and 2 or 0  -- Y-offset is 2 for PlaceId 13447209899, otherwise 0
 local currentAnimTrack = nil  -- To keep track of the current animation
 
 -- Function to create the floating part
@@ -45,7 +46,8 @@ local function f(trgHRP, char)
             floatPart.CFrame = hrp.CFrame * CFrame.new(0, -3.1, 0)
         end
         if trgHRP and hrp then
-            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, 2, 3.3)
+            -- Use the Y-offset based on the PlaceId
+            hrp.CFrame = trgHRP.CFrame * CFrame.new(-2, yOffset, 3.3)
         end
     end)
 end
