@@ -8,7 +8,10 @@ local fConn = nil
 local tE = false  -- Ensure toggle is off initially
 local tK = Enum.KeyCode.C
 local floatName = "FloatingPart"  -- Name of the floating part
-local magnetAnimationId = "rbxassetid://14611804638"
+
+-- Determine the correct animation ID based on the PlaceId
+local placeId = game.PlaceId
+local magnetAnimationId = placeId == 13447209899 and "rbxassetid://14611804638" or "rbxassetid://313762630"
 local currentAnimTrack = nil  -- To keep track of the current animation
 
 -- Function to create the floating part
