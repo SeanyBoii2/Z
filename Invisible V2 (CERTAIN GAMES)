@@ -10,7 +10,7 @@ local character = player.Character or player.CharacterAdded:Wait()
 local gamePositions = {
     [14835828495] = Vector3.new(154, 1001, -23), -- Dudes Battlegrounds
     [567890123] = Vector3.new(693, 219, -72), -- Realm Rampage
-    [15708523495] = Vector3.new(555, 353, -85) -- Ninja Battlegrounds
+    [15708523495] = Vector3.new(359, 354, -502) -- Ninja Battlegrounds
 }
 
 -- Get current game position or default
