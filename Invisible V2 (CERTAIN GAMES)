@@ -9,9 +9,8 @@ local character = player.Character or player.CharacterAdded:Wait()
 -- Define teleport positions based on game PlaceId
 local gamePositions = {
     [14835828495] = Vector3.new(154, 1001, -23), -- Dudes Battlegrounds
-    [13076380114] = Vector3.new(419, 3, -355), -- Heroes Battlegrounds
     [567890123] = Vector3.new(693, 219, -72), -- Realm Rampage
-    [11815767793] = Vector3.new(916, 186, 488) -- Realm Rampage
+    [15708523495] = Vector3.new(-68, 353, 394) -- Ninja Battlegrounds
 }
 
 -- Get current game position or default
