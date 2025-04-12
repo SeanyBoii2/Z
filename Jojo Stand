@@ -6,7 +6,7 @@ local char = lp.Character or lp.CharacterAdded:Wait()
 local t = false
 local fConn = nil
 local tE = false  -- Ensure toggle is off initially
-local tK = Enum.KeyCode.C
+local tK = Enum.KeyCode.R
 local floatName = "FloatingPart"  -- Name of the floating part
 
 -- Determine the correct animation ID and Y-offset based on the PlaceId
