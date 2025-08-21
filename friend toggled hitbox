@@ -1,0 +1,35 @@
+local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- hitbox size
+local HeadSize = 12 
+
+-- check if target is a friend
+local function isFriend(targetPlayer)
+    local success, result = pcall(function()
+        return player:IsFriendsWith(targetPlayer.UserId)
+    end)
+    return success and result
+end
+
+-- expand hitboxes every frame
+RunService.RenderStepped:Connect(function()
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= player and not isFriend(v) then
+            local char = v.Character
+            if char then
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                if rootPart then
+                    pcall(function()
+                        rootPart.Size = Vector3.new(HeadSize, HeadSize, HeadSize)
+                        rootPart.Transparency = 0.9
+                        rootPart.BrickColor = BrickColor.new("Really blue")
+                        rootPart.Material = Enum.Material.Neon
+                        rootPart.CanCollide = false
+                    end)
+                end
+            end
+        end
+    end
+end)
