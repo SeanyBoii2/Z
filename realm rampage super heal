@@ -1,0 +1,40 @@
+-- LocalScript (StarterPlayerScripts or StarterCharacterScripts)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local savedPosition = nil
+local teleportCoords = Vector3.new(17, -460, -26)
+
+-- Function to teleport safely
+local function teleportTo(position)
+	if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+		player.Character:WaitForChild("HumanoidRootPart").CFrame = CFrame.new(position)
+	end
+end
+
+-- Respawn handling
+player.CharacterAdded:Connect(function(char)
+	char:WaitForChild("HumanoidRootPart")
+	task.wait(0) -- slight delay to make sure character is fully loaded
+	if savedPosition then
+		teleportTo(savedPosition)
+	end
+end)
+
+-- Key press handling (H)
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.V then
+		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			-- Save current position
+			savedPosition = player.Character.HumanoidRootPart.Position
+			print("Saved position:", savedPosition)
+
+			-- Teleport to fixed coords
+			teleportTo(teleportCoords)
+			print("Teleported to:", teleportCoords)
+		end
+	end
+end)
