@@ -1,0 +1,108 @@
+local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
+local Workspace = game:GetService("Workspace"):FindFirstChild("Game")
+
+-- CONFIG
+local TAG_NAME = "HitboxProcessed"
+local PART_NAME = "HumanoidRootPart" -- Hitbox target
+local HITBOX_SIZE = Vector3.new(50, 50, 5)
+local TARGET_FOLDER_NAME = "Enemies"
+local HITBOX_TRANSPARENCY = 1
+local HIGHLIGHT_COLOR = Color3.fromRGB(255, 0, 0) -- green
+
+if TAG_NAME == "Head" then
+	error("TAG_NAME cannot be 'Head'. Please change it.")
+end
+
+-- Helpers
+local function isPlayerCharacter(model)
+	return model and model:IsA("Model") and Players:GetPlayerFromCharacter(model) ~= nil
+end
+
+local function removeDecals(part)
+	for _, decal in ipairs(part:GetChildren()) do
+		if decal:IsA("Decal") or decal:IsA("Texture") then
+			decal:Destroy()
+		end
+	end
+end
+
+local function makeModelNonCollidable(model)
+	for _, part in ipairs(model:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+		end
+	end
+end
+
+local function addHighlight(model)
+	for _, torsoName in ipairs({"UpperTorso", "Torso"}) do
+		local torso = model:FindFirstChild(torsoName)
+		if torso and torso:IsA("BasePart") then
+			local highlight = torso:FindFirstChild("GreenHighlight")
+			if not highlight then
+				highlight = Instance.new("Highlight")
+				highlight.Name = "GreenHighlight"
+				highlight.Adornee = torso
+				highlight.FillColor = HIGHLIGHT_COLOR
+				highlight.OutlineTransparency = 1
+				highlight.Parent = torso
+			end
+		end
+	end
+end
+
+local function applyHitbox(part)
+	local model = part.Parent
+	if not model or not part:IsA("BasePart") then return end
+	if isPlayerCharacter(model) then return end
+
+	-- Make ALL parts of the character non-collidable first
+	makeModelNonCollidable(model)
+
+	-- Apply hitbox only to the chosen part
+	part.Size = HITBOX_SIZE
+	part.Massless = false
+	part.CanCollide = false
+	part.Transparency = HITBOX_TRANSPARENCY
+	removeDecals(part)
+	CollectionService:AddTag(part, TAG_NAME)
+
+	-- Add green highlight
+	addHighlight(model)
+
+	-- Destroy entire model on humanoid death
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.Died:Connect(function()
+			if model and model.Parent then
+				model:Destroy()
+			end
+		end)
+	end
+end
+
+-- Scan target folder or workspace
+local function scanTarget()
+	local target = Workspace:FindFirstChild(TARGET_FOLDER_NAME) or Workspace
+	if target then
+		for _, part in ipairs(target:GetDescendants()) do
+			if part:IsA("BasePart") and part.Name == PART_NAME then
+				applyHitbox(part)
+			end
+		end
+	end
+end
+
+-- Initial scan
+scanTarget()
+
+-- Handle new parts dynamically
+Workspace.DescendantAdded:Connect(function(descendant)
+	if descendant:IsA("BasePart") and descendant.Name == PART_NAME then
+		local target = Workspace:FindFirstChild(TARGET_FOLDER_NAME) or Workspace
+		if target and descendant:IsDescendantOf(target) then
+			applyHitbox(descendant)
+		end
+	end
+end)
