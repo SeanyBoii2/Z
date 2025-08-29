@@ -1,4 +1,4 @@
-local savedSpeed = 50
+local savedSpeed = 60
 local boostEnabled = false
 local flying = false
 local baseSpeed = savedSpeed
