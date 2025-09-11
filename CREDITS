@@ -1,0 +1,9 @@
+-- LocalScript inside StarterGui
+
+local StarterGui = game:GetService("StarterGui")
+
+StarterGui:SetCore("SendNotification", {
+    Title = "Notification",
+    Text = "Made by spookyie :)",
+    Duration = 5 -- how many seconds it stays
+})
