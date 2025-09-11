@@ -1,0 +1,73 @@
+-- Table to map old animation IDs to new animation IDs
+local animationMap = {
+   
+    ["rbxassetid://17170687989"] = "rbxassetid://18718836535", -- DownSlam
+    ["rbxassetid://15450941296"] = "rbxassetid://14580198532", -- Front Dash
+    ["rbxassetid://15450949109"] = "rbxassetid://14693813660", -- Front Dash Punch
+    ["rbxassetid://14996795850"] = "rbxassetid://14612002089", -- Burst Rush Start
+    ["rbxassetid://14986346989"] = "rbxassetid://14807224525", -- Burst Rush Attack
+    ["rbxassetid://15195065611"] = "rbxassetid://17305379007", -- Rising Impact Start
+    ["rbxassetid://15195201406"] = "rbxassetid://14612002089", -- Rising Impact Attack
+    ["rbxassetid://15783229134"] = "rbxassetid://14611572720", -- Rising Impact Finisher
+    ["rbxassetid://15254364213"] = "rbxassetid://13901381589", -- Boomin' Backhand
+    ["rbxassetid://15254641861"] = "rbxassetid://15645552606", -- Boomin' Backhand Attack
+    ["rbxassetid://15378119183"] = "rbxassetid://15529558446", -- Masenko
+    ["rbxassetid://15756873017"] = "rbxassetid://16069051348", -- Masenko Finisher
+    ["rbxassetid://17058233524"] = "rbxassetid://137315130951946", -- idle
+}
+
+local player = game.Players.LocalPlayer
+
+-- Function to replace animations
+local function replaceAnimations(humanoid)
+    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+        local oldAnimationId = track.Animation.AnimationId
+        
+        if animationMap[oldAnimationId] then
+            -- Stop the original animation before replacing it
+            track:Stop()
+            
+            -- Create a new animation and set its ID
+            local newAnimation = Instance.new("Animation")
+            newAnimation.AnimationId = animationMap[oldAnimationId]
+            
+            -- Load and play the new animation
+            local newTrack = humanoid:LoadAnimation(newAnimation)
+
+            -- Make idle loop, everything else play once
+            if oldAnimationId == "rbxassetid://17058233524" then
+                newTrack.Looped = false
+            else
+                newTrack.Looped = false
+            end
+
+            -- If DownSlam, make it play 2x faster
+            if oldAnimationId == "rbxassetid://17170687989" then
+                newTrack:AdjustSpeed(2)
+            end
+
+            newTrack:Play()
+        end
+    end
+end
+
+-- Function to handle character loading & respawning
+local function onCharacterAdded(character)
+    local humanoid = character:WaitForChild("Humanoid")
+
+    -- Replace animations when they play
+    humanoid.AnimationPlayed:Connect(function(track)
+        local oldAnimationId = track.Animation.AnimationId
+        if animationMap[oldAnimationId] then
+            replaceAnimations(humanoid)
+        end
+    end)
+end
+
+-- Apply to the current character
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+-- Reapply logic after respawn
+player.CharacterAdded:Connect(onCharacterAdded)
