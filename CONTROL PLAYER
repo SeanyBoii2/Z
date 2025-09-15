@@ -3,7 +3,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- change this to the "owner" username you want to listen to
-local ownerName = "OwnerName"
+local ownerName = "IIIlllIllIlllllIlIIl"
 
 -- helper: get my Humanoid + HumanoidRootPart
 local function getSelf()
