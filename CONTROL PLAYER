@@ -1,0 +1,66 @@
+-- StarterPlayerScripts/ChatControl.lua
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- change this to the "owner" username you want to listen to
+local ownerName = "OwnerName"
+
+-- helper: get my Humanoid + HumanoidRootPart
+local function getSelf()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char, char:FindFirstChild("Humanoid"), char:FindFirstChild("HumanoidRootPart")
+end
+
+-- actions
+local function teleportToOwner(owner)
+    local _, _, myHRP = getSelf()
+    local oChar = owner.Character
+    local oHRP = oChar and oChar:FindFirstChild("HumanoidRootPart")
+    if myHRP and oHRP then
+        myHRP.CFrame = oHRP.CFrame + Vector3.new(0, 3, 0)
+    end
+end
+
+local function resetSelf()
+    local _, humanoid = getSelf()
+    if humanoid then
+        humanoid.Health = 0 -- classic reset
+    end
+end
+
+local function anchorSelf(toggle)
+    local _, _, myHRP = getSelf()
+    if myHRP then
+        myHRP.Anchored = toggle
+    end
+end
+
+-- hook up to owner chat
+local function setup(owner)
+    owner.Chatted:Connect(function(msg)
+        msg = msg:lower()
+
+        if msg == "teleport" then
+            teleportToOwner(owner)
+        elseif msg == "reset" then
+            resetSelf()
+        elseif msg == "anchor" then
+            anchorSelf(true)
+        elseif msg == "unanchor" then
+            anchorSelf(false)
+        end
+    end)
+end
+
+-- attach to owner if they’re already in game
+local owner = Players:FindFirstChild(ownerName)
+if owner then
+    setup(owner)
+end
+
+-- or if they join later
+Players.PlayerAdded:Connect(function(plr)
+    if plr.Name == ownerName then
+        setup(plr)
+    end
+end)
