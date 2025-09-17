@@ -1,4 +1,3 @@
---// Multi-Script Loader with Cooldown
 local urls = {
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Anti-Ragdoll",
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Infinite%20Yield",
@@ -7,25 +6,21 @@ local urls = {
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Superman%20animations",
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/realm%20rampage%20super%20heal",
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/CONTROL%20PLAYER",
-    "https://pastebin.com/raw/UMqs8fgi",
-    "https://pastebin.com/raw/aKk6z6wv",
     "https://raw.githubusercontent.com/Linux6699/DaHubRevival/main/AntiFling.lua",
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/ANTIFLING",
     "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/CREDITS"
 }
 
-local cooldown = 0.5 -- seconds between each script
+local cooldown = 0.5
 
 for _, url in ipairs(urls) do
-    local success, result = pcall(function()
-        return loadstring(game:HttpGet(url))()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet(url))()
     end)
-
-    if not success then
-        warn("❌ Failed to load:", url, "\nError:", result)
-    else
+    if ok then
         print("✅ Loaded:", url)
+    else
+        warn("❌ Failed:", url, "\nError:", err)
     end
-
     task.wait(cooldown)
 end
