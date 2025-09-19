@@ -1,5 +1,6 @@
 -- StarterPlayerScripts/ChatControl.lua
 local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
 local LocalPlayer = Players.LocalPlayer
 
 -- change this to the "owner" display name you want to listen to
@@ -35,37 +36,40 @@ local function anchorSelf(toggle)
     end
 end
 
--- hook up to an owner's chat
-local function setup(owner)
-    -- avoid duplicate connections
-    if owner:GetAttribute("ChatControlConnected") then return end
-    owner:SetAttribute("ChatControlConnected", true)
+-- handle a chat message from the "owner"
+local function handleMessage(fromPlayer, msg)
+    if fromPlayer.DisplayName ~= ownerDisplayName then return end
 
-    owner.Chatted:Connect(function(msg)
-        msg = msg:lower()
+    msg = msg:lower()
+    if msg == "teleport" then
+        teleportToOwner(fromPlayer)
+    elseif msg == "reset" then
+        resetSelf()
+    elseif msg == "anchor" then
+        anchorSelf(true)
+    elseif msg == "unanchor" then
+        anchorSelf(false)
+    end
+end
 
-        if msg == "teleport" then
-            teleportToOwner(owner)
-        elseif msg == "reset" then
-            resetSelf()
-        elseif msg == "anchor" then
-            anchorSelf(true)
-        elseif msg == "unanchor" then
-            anchorSelf(false)
+-- support new TextChatService
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+    TextChatService.MessageReceived:Connect(function(message)
+        local sender = message.TextSource and Players:GetPlayerByUserId(message.TextSource.UserId)
+        if sender then
+            handleMessage(sender, message.Text)
         end
     end)
-end
-
--- check existing players by DisplayName
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr.DisplayName == ownerDisplayName then
-        setup(plr)
+else
+    -- fallback for legacy chat
+    local function setupLegacy(plr)
+        plr.Chatted:Connect(function(msg)
+            handleMessage(plr, msg)
+        end)
     end
-end
 
--- check new players
-Players.PlayerAdded:Connect(function(plr)
-    if plr.DisplayName == ownerDisplayName then
-        setup(plr)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        setupLegacy(plr)
     end
-end)
+    Players.PlayerAdded:Connect(setupLegacy)
+end
