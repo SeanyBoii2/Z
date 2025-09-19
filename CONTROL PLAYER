@@ -2,8 +2,8 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- change this to the "owner" username you want to listen to
-local ownerName = "IIIlllIllIlllllIlIIl"
+-- change this to the "owner" display name you want to listen to
+local ownerDisplayName = "Superman"
 
 -- helper: get my Humanoid + HumanoidRootPart
 local function getSelf()
@@ -24,7 +24,7 @@ end
 local function resetSelf()
     local _, humanoid = getSelf()
     if humanoid then
-        humanoid.Health = 0 -- classic reset
+        humanoid.Health = 0
     end
 end
 
@@ -35,8 +35,12 @@ local function anchorSelf(toggle)
     end
 end
 
--- hook up to owner chat
+-- hook up to an owner's chat
 local function setup(owner)
+    -- avoid duplicate connections
+    if owner:GetAttribute("ChatControlConnected") then return end
+    owner:SetAttribute("ChatControlConnected", true)
+
     owner.Chatted:Connect(function(msg)
         msg = msg:lower()
 
@@ -52,15 +56,16 @@ local function setup(owner)
     end)
 end
 
--- attach to owner if they’re already in game
-local owner = Players:FindFirstChild(ownerName)
-if owner then
-    setup(owner)
+-- check existing players by DisplayName
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr.DisplayName == ownerDisplayName then
+        setup(plr)
+    end
 end
 
--- or if they join later
+-- check new players
 Players.PlayerAdded:Connect(function(plr)
-    if plr.Name == ownerName then
+    if plr.DisplayName == ownerDisplayName then
         setup(plr)
     end
 end)
