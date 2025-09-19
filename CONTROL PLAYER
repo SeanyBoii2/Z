@@ -1,18 +1,16 @@
--- StarterPlayerScripts/ChatControl.lua
+-- StarterPlayerScripts/ChatControl.lua (LocalScript)
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local LocalPlayer = Players.LocalPlayer
 
--- change this to the "owner" display name you want to listen to
+-- change this to the display name (or username) you want to listen to
 local ownerDisplayName = "Superman"
 
--- helper: get my Humanoid + HumanoidRootPart
 local function getSelf()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     return char, char:FindFirstChild("Humanoid"), char:FindFirstChild("HumanoidRootPart")
 end
 
--- actions
 local function teleportToOwner(owner)
     local _, _, myHRP = getSelf()
     local oChar = owner.Character
@@ -36,11 +34,26 @@ local function anchorSelf(toggle)
     end
 end
 
--- handle a chat message from the "owner"
-local function handleMessage(fromPlayer, msg)
-    if fromPlayer.DisplayName ~= ownerDisplayName then return end
+local function isOwner(plr)
+    if not plr then return false end
+    local pkt = function(s) return (s or ""):lower() end
+    return pkt(plr.DisplayName) == pkt(ownerDisplayName) or pkt(plr.Name) == pkt(ownerDisplayName)
+end
 
-    msg = msg:lower()
+local function normalize(msg)
+    if not msg then return "" end
+    msg = msg:lower():gsub("^%s*(.-)%s*$", "%1")    -- trim
+    msg = msg:gsub("^[/!]+", "")                  -- allow leading / or !
+    msg = msg:gsub("^[%p%s]+", ""):gsub("[%p%s]+$", "")
+    return msg
+end
+
+local function handleMessage(fromPlayer, rawMsg)
+    if not fromPlayer or not rawMsg then return end
+    if not isOwner(fromPlayer) then return end
+    local msg = normalize(rawMsg)
+    -- debug output: open Output window in Studio to see these
+    print(("ChatControl: message from %s (%s): %s"):format(fromPlayer.Name, fromPlayer.DisplayName or "?", msg))
     if msg == "teleport" then
         teleportToOwner(fromPlayer)
     elseif msg == "reset" then
@@ -52,24 +65,43 @@ local function handleMessage(fromPlayer, msg)
     end
 end
 
--- support new TextChatService
-if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-    TextChatService.MessageReceived:Connect(function(message)
-        local sender = message.TextSource and Players:GetPlayerByUserId(message.TextSource.UserId)
-        if sender then
-            handleMessage(sender, message.Text)
-        end
-    end)
-else
-    -- fallback for legacy chat
-    local function setupLegacy(plr)
-        plr.Chatted:Connect(function(msg)
-            handleMessage(plr, msg)
+-- ---- TextChatService (modern) ----
+if TextChatService then
+    -- MessageReceived (TextChatMessage)
+    if TextChatService.MessageReceived then
+        TextChatService.MessageReceived:Connect(function(textChatMessage)
+            local source = textChatMessage and textChatMessage.TextSource
+            local userId = source and source.UserId
+            local plr = userId and Players:GetPlayerByUserId(userId)
+            if plr then
+                handleMessage(plr, textChatMessage.Text)
+            end
         end)
     end
 
-    for _, plr in ipairs(Players:GetPlayers()) do
-        setupLegacy(plr)
+    -- Some tutorials/older code use OnIncomingMessage; support it if present
+    if TextChatService.OnIncomingMessage then
+        local old = TextChatService.OnIncomingMessage
+        TextChatService.OnIncomingMessage = function(message)
+            local source = message and message.TextSource
+            local userId = source and source.UserId
+            local plr = userId and Players:GetPlayerByUserId(userId)
+            if plr then
+                handleMessage(plr, message.Text)
+            end
+            if old then
+                return old(message)
+            end
+        end
     end
-    Players.PlayerAdded:Connect(setupLegacy)
 end
+
+-- ---- Legacy fallback (may not always fire client-side) ----
+for _, p in ipairs(Players:GetPlayers()) do
+    p.Chatted:Connect(function(msg) handleMessage(p, msg) end)
+end
+Players.PlayerAdded:Connect(function(p)
+    p.Chatted:Connect(function(msg) handleMessage(p, msg) end)
+end)
+
+print("ChatControl: ready (listening for '" .. ownerDisplayName .. "')")
