@@ -1,22 +1,40 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
-local Workspace = game:GetService("Workspace"):FindFirstChild("Game")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 -- CONFIG
 local TAG_NAME = "HitboxProcessed"
-local PART_NAME = "HumanoidRootPart" -- Hitbox target
-local HITBOX_SIZE = Vector3.new(50, 50, 5)
-local TARGET_FOLDER_NAME = "Enemies"
-local HITBOX_TRANSPARENCY = 1
-local HIGHLIGHT_COLOR = Color3.fromRGB(255, 0, 0) -- green
+local PART_NAMES = {"Head", "UpperTorso"} -- alternate between these
+local HITBOX_SIZE = Vector3.new(8, 8, 8)
+local TARGET_FOLDER_NAME = "Mobs"
+local HITBOX_TRANSPARENCY = 0.9
+local HIGHLIGHT_COLOR = Color3.fromRGB(255, 0, 0)
 
-if TAG_NAME == "Head" then
-	error("TAG_NAME cannot be 'Head'. Please change it.")
+-- TOGGLES
+local highlightEnabled = false
+local playersEnabled = true
+
+-- Local player
+local localPlayer = Players.LocalPlayer
+
+-- Alternation tracker
+local currentIndex = 1
+local function getNextPartName()
+	currentIndex += 1
+	if currentIndex > #PART_NAMES then
+		currentIndex = 1
+	end
+	return PART_NAMES[currentIndex]
 end
 
 -- Helpers
 local function isPlayerCharacter(model)
 	return model and model:IsA("Model") and Players:GetPlayerFromCharacter(model) ~= nil
+end
+
+local function isLocalPlayerCharacter(model)
+	return localPlayer and localPlayer.Character and model == localPlayer.Character
 end
 
 local function removeDecals(part)
@@ -36,13 +54,13 @@ local function makeModelNonCollidable(model)
 end
 
 local function addHighlight(model)
+	if not highlightEnabled then return end
 	for _, torsoName in ipairs({"UpperTorso", "Torso"}) do
 		local torso = model:FindFirstChild(torsoName)
 		if torso and torso:IsA("BasePart") then
-			local highlight = torso:FindFirstChild("GreenHighlight")
-			if not highlight then
-				highlight = Instance.new("Highlight")
-				highlight.Name = "GreenHighlight"
+			if not torso:FindFirstChild("HitboxHighlight") then
+				local highlight = Instance.new("Highlight")
+				highlight.Name = "HitboxHighlight"
 				highlight.Adornee = torso
 				highlight.FillColor = HIGHLIGHT_COLOR
 				highlight.OutlineTransparency = 1
@@ -52,29 +70,61 @@ local function addHighlight(model)
 	end
 end
 
+-- Refresh hitbox safely
+local function refreshHitbox(part)
+	if not part or not part.Parent then return end
+
+	if part.Size ~= HITBOX_SIZE then
+		part.Size = HITBOX_SIZE
+	end
+	if not part.Massless then
+		part.Massless = true
+	end
+	if part.CanCollide then
+		part.CanCollide = false
+	end
+	if part.Transparency ~= HITBOX_TRANSPARENCY then
+		part.Transparency = HITBOX_TRANSPARENCY
+	end
+
+	removeDecals(part)
+
+	local mesh = part:FindFirstChildOfClass("SpecialMesh") or part:FindFirstChildOfClass("Mesh")
+	if mesh then
+		local desiredScale = HITBOX_SIZE / part.Size
+		if mesh.Scale ~= desiredScale then
+			mesh.Scale = desiredScale
+		end
+	end
+end
+
+-- Main
 local function applyHitbox(part)
 	local model = part.Parent
 	if not model or not part:IsA("BasePart") then return end
-	if isPlayerCharacter(model) then return end
+	if isLocalPlayerCharacter(model) then return end
+	if not playersEnabled and isPlayerCharacter(model) then return end
+	if CollectionService:HasTag(part, TAG_NAME) then return end
 
-	-- Make ALL parts of the character non-collidable first
-	makeModelNonCollidable(model)
-
-	-- Apply hitbox only to the chosen part
-	part.Size = HITBOX_SIZE
-	part.Massless = false
-	part.CanCollide = false
-	part.Transparency = HITBOX_TRANSPARENCY
-	removeDecals(part)
 	CollectionService:AddTag(part, TAG_NAME)
 
-	-- Add green highlight
+	makeModelNonCollidable(model)
+	refreshHitbox(part)
 	addHighlight(model)
 
-	-- Destroy entire model on humanoid death
+	part:GetPropertyChangedSignal("Size"):Connect(function()
+		refreshHitbox(part)
+	end)
+	part:GetPropertyChangedSignal("Transparency"):Connect(function()
+		refreshHitbox(part)
+	end)
+	part:GetPropertyChangedSignal("CanCollide"):Connect(function()
+		refreshHitbox(part)
+	end)
+
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		humanoid.Died:Connect(function()
+		humanoid.Died:Once(function()
 			if model and model.Parent then
 				model:Destroy()
 			end
@@ -82,27 +132,41 @@ local function applyHitbox(part)
 	end
 end
 
--- Scan target folder or workspace
+-- Scan existing
 local function scanTarget()
+	local partName = getNextPartName()
 	local target = Workspace:FindFirstChild(TARGET_FOLDER_NAME) or Workspace
+
 	if target then
 		for _, part in ipairs(target:GetDescendants()) do
-			if part:IsA("BasePart") and part.Name == PART_NAME then
+			if part:IsA("BasePart") and part.Name == partName then
 				applyHitbox(part)
+			end
+		end
+	end
+
+	if playersEnabled then
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr ~= localPlayer and plr.Character then
+				local body = plr.Character:FindFirstChild(partName)
+				if body and body:IsA("BasePart") then
+					applyHitbox(body)
+				end
 			end
 		end
 	end
 end
 
--- Initial scan
 scanTarget()
 
--- Handle new parts dynamically
+-- Dynamic new parts
 Workspace.DescendantAdded:Connect(function(descendant)
-	if descendant:IsA("BasePart") and descendant.Name == PART_NAME then
+	if descendant:IsA("BasePart") and descendant.Name == PART_NAMES[currentIndex] then
 		local target = Workspace:FindFirstChild(TARGET_FOLDER_NAME) or Workspace
-		if target and descendant:IsDescendantOf(target) then
-			applyHitbox(descendant)
+		if (target and descendant:IsDescendantOf(target)) or playersEnabled then
+			if not isLocalPlayerCharacter(descendant.Parent) then
+				applyHitbox(descendant)
+			end
 		end
 	end
 end)
