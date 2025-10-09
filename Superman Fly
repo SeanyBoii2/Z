@@ -68,7 +68,7 @@ local function setupAnimations()
 		back3 = newAnim(214744412),
 		back4 = newAnim(214744412),
 		down = newAnim(233322916),
-		idle1 = newAnim(97171309),
+		idle1 = newAnim(313762630),
 		idleHover = newAnim(313762630)
 	}
 	tracks = {}
@@ -317,11 +317,11 @@ RunService.RenderStepped:Connect(function(dt)
 			-- Combine hover + idle pose
 			tracks.idle1:Play()
 			tracks.idle1:AdjustWeight(1)
-			tracks.idle1:AdjustSpeed(1)
+			tracks.idle1:AdjustSpeed(0.5)
 
 			tracks.idleHover:Play()
-			tracks.idleHover:AdjustWeight(0.25)
-			tracks.idleHover:AdjustSpeed(0.3)
+			tracks.idleHover:AdjustWeight(1)
+			tracks.idleHover:AdjustSpeed(0.5)
 		end
 	end
 end)
