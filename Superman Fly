@@ -345,3 +345,5 @@ createGui()
 bindInput()
 player.CharacterAdded:Connect(bindCharacter)
 bindCharacter()
+
+print("✅ Fly system loaded with idle + hover blend (no hover bob)")
