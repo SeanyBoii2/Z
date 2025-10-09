@@ -321,7 +321,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 			tracks.idleHover:Play()
 			tracks.idleHover:AdjustWeight(0.25)
-			tracks.idleHover:AdjustSpeed(1)
+			tracks.idleHover:AdjustSpeed(0.3)
 		end
 	end
 end)
