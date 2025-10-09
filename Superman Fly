@@ -68,7 +68,8 @@ local function setupAnimations()
 		back3 = newAnim(214744412),
 		back4 = newAnim(214744412),
 		down = newAnim(233322916),
-		idle1 = newAnim(97171309)
+		idle1 = newAnim(97171309),
+		idleHover = newAnim(313762630)
 	}
 	tracks = {}
 	for name, anim in pairs(animations) do
@@ -240,7 +241,6 @@ RunService.RenderStepped:Connect(function(dt)
 
 	ensurePhysics()
 
-	-- Movement direction
 	local dir = Vector3.zero
 	local camCF = Camera.CFrame
 
@@ -253,7 +253,6 @@ RunService.RenderStepped:Connect(function(dt)
 
 	if dir.Magnitude > 0 then dir = dir.Unit end
 
-	-- Speed logic
 	flySpeed = baseSpeed
 	if inputFlags.forward then
 		forwardHold += dt
@@ -267,15 +266,13 @@ RunService.RenderStepped:Connect(function(dt)
 	local currentSpeed = flySpeed
 	if boostEnabled then currentSpeed += 100 end
 
-	-- Apply physics
 	bodyVelocity.Velocity = dir * currentSpeed
 
-	-- Smooth BodyGyro rotation
 	local alpha = 1 - math.exp(-gyroSmoothness * dt)
 	bodyGyro.CFrame = bodyGyro.CFrame:Lerp(camCF, alpha)
 	humanoid.PlatformStand = true
 
-	-- Anim logic (same as your script)
+	-- Anim logic
 	if inputFlags.up then
 		if not tracks.up.IsPlaying then stopAll(); tracks.up:Play() end
 	elseif inputFlags.down then
@@ -314,9 +311,17 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 	else
-		if not tracks.idle1.IsPlaying then
+		if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
 			stopAll()
-			tracks.idle1:Play(); tracks.idle1:AdjustSpeed(0)
+
+			-- Combine hover + idle pose
+			tracks.idle1:Play()
+			tracks.idle1:AdjustWeight(0.6)
+			tracks.idle1:AdjustSpeed(0.2)
+
+			tracks.idleHover:Play()
+			tracks.idleHover:AdjustWeight(0.8)
+			tracks.idleHover:AdjustSpeed(1)
 		end
 	end
 end)
