@@ -1,5 +1,3 @@
-
-
 --== CONFIG / STATE ==--
 local savedSpeed = 60
 local boostEnabled = false
@@ -70,7 +68,8 @@ local function setupAnimations()
 		back3 = newAnim(214744412),
 		back4 = newAnim(214744412),
 		down = newAnim(233322916),
-		idle1 = newAnim(313762630)
+		idle1 = newAnim(97171309),     -- main idle (dominant)
+		idleHover = newAnim(313762630) -- hover overlay (subtle)
 	}
 	tracks = {}
 	for name, anim in pairs(animations) do
@@ -81,7 +80,7 @@ end
 local function stopAll()
 	for _, track in pairs(tracks) do
 		if track and track.IsPlaying then
-			track:Stop()
+			track:Stop(0.25)
 		end
 	end
 end
@@ -242,7 +241,6 @@ RunService.RenderStepped:Connect(function(dt)
 
 	ensurePhysics()
 
-	-- Movement direction
 	local dir = Vector3.zero
 	local camCF = Camera.CFrame
 
@@ -255,7 +253,6 @@ RunService.RenderStepped:Connect(function(dt)
 
 	if dir.Magnitude > 0 then dir = dir.Unit end
 
-	-- Speed logic
 	flySpeed = baseSpeed
 	if inputFlags.forward then
 		forwardHold += dt
@@ -269,15 +266,13 @@ RunService.RenderStepped:Connect(function(dt)
 	local currentSpeed = flySpeed
 	if boostEnabled then currentSpeed += 100 end
 
-	-- Apply physics
 	bodyVelocity.Velocity = dir * currentSpeed
 
-	-- Smooth BodyGyro rotation
 	local alpha = 1 - math.exp(-gyroSmoothness * dt)
 	bodyGyro.CFrame = bodyGyro.CFrame:Lerp(camCF, alpha)
 	humanoid.PlatformStand = true
 
-	-- Anim logic (same as your script)
+	-- Anim logic
 	if inputFlags.up then
 		if not tracks.up.IsPlaying then stopAll(); tracks.up:Play() end
 	elseif inputFlags.down then
@@ -316,9 +311,17 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 	else
-		if not tracks.idle1.IsPlaying then
+		if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
 			stopAll()
-			tracks.idle1:Play(); tracks.idle1:AdjustSpeed(0)
+
+			-- Idle dominant blend
+			tracks.idle1:Play()
+			tracks.idle1:AdjustWeight(1)
+			tracks.idle1:AdjustSpeed(0)
+
+			tracks.idleHover:Play()
+			tracks.idleHover:AdjustWeight(2)
+			tracks.idleHover:AdjustSpeed(1)
 		end
 	end
 end)
@@ -342,3 +345,5 @@ createGui()
 bindInput()
 player.CharacterAdded:Connect(bindCharacter)
 bindCharacter()
+
+print("✅ Fly system loaded with idle + hover blend (no hover bob)")
