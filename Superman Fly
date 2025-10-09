@@ -68,8 +68,7 @@ local function setupAnimations()
 		back3 = newAnim(214744412),
 		back4 = newAnim(214744412),
 		down = newAnim(233322916),
-		idle1 = newAnim(97171309),
-		idleHover = newAnim(313762630)
+		idle1 = newAnim(97171309)
 	}
 	tracks = {}
 	for name, anim in pairs(animations) do
@@ -187,6 +186,28 @@ local function createGui()
 	end)
 end
 
+--== HOVER BOB ==--
+local hoverTween
+local hovering = false
+
+local function startHoverBob()
+	if hovering then return end
+	hovering = true
+	local baseY = HRP.Position.Y
+	local bobTweenInfo = TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+	local bobGoal = { Position = Vector3.new(HRP.Position.X, baseY + 0.5, HRP.Position.Z) }
+	hoverTween = TweenService:Create(HRP, bobTweenInfo, bobGoal)
+	hoverTween:Play()
+end
+
+local function stopHoverBob()
+	if hoverTween then
+		hoverTween:Cancel()
+		hoverTween = nil
+	end
+	hovering = false
+end
+
 --== INPUT ==--
 local function bindInput()
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -274,22 +295,27 @@ RunService.RenderStepped:Connect(function(dt)
 
 	-- Anim logic
 	if inputFlags.up then
+		stopHoverBob()
 		if not tracks.up.IsPlaying then stopAll(); tracks.up:Play() end
 	elseif inputFlags.down then
+		stopHoverBob()
 		if not tracks.down.IsPlaying then stopAll(); tracks.down:Play() end
 	elseif inputFlags.left then
+		stopHoverBob()
 		if not tracks.left1.IsPlaying then
 			stopAll()
 			tracks.left1:Play(); tracks.left1.TimePosition = 2.0; tracks.left1:AdjustSpeed(0)
 			tracks.left2:Play(); tracks.left2.TimePosition = 0.5; tracks.left2:AdjustSpeed(0)
 		end
 	elseif inputFlags.right then
+		stopHoverBob()
 		if not tracks.right1.IsPlaying then
 			stopAll()
 			tracks.right1:Play(); tracks.right1.TimePosition = 1.1; tracks.right1:AdjustSpeed(0)
 			tracks.right2:Play(); tracks.right2.TimePosition = 0.5; tracks.right2:AdjustSpeed(0)
 		end
 	elseif inputFlags.back then
+		stopHoverBob()
 		if not tracks.back1.IsPlaying then
 			stopAll()
 			tracks.back1:Play(); tracks.back1.TimePosition = 5.3; tracks.back1:AdjustSpeed(0)
@@ -298,6 +324,7 @@ RunService.RenderStepped:Connect(function(dt)
 			tracks.back4:Play(); tracks.back4.TimePosition = 1; tracks.back4:AdjustSpeed(0)
 		end
 	elseif inputFlags.forward then
+		stopHoverBob()
 		if forwardHold >= 0.1 then
 			if not tracks.flyFast.IsPlaying then
 				stopAll()
@@ -311,17 +338,12 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 	else
-		if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
+		-- Idle hover state
+		if not tracks.idle1.IsPlaying then
 			stopAll()
-
-			-- Combine hover + idle pose
 			tracks.idle1:Play()
-			tracks.idle1:AdjustWeight(0.6)
-			tracks.idle1:AdjustSpeed(0.2)
-
-			tracks.idleHover:Play()
-			tracks.idleHover:AdjustWeight(0.8)
-			tracks.idleHover:AdjustSpeed(1)
+			tracks.idle1:AdjustSpeed(1)
+			startHoverBob()
 		end
 	end
 end)
