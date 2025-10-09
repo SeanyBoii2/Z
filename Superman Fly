@@ -68,8 +68,8 @@ local function setupAnimations()
 		back3 = newAnim(214744412),
 		back4 = newAnim(214744412),
 		down = newAnim(233322916),
-		idle1 = newAnim(97171309),     -- main idle (dominant)
-		idleHover = newAnim(313762630) -- hover overlay (subtle)
+		idle1 = newAnim(97171309),
+		idleHover = newAnim(313762630)
 	}
 	tracks = {}
 	for name, anim in pairs(animations) do
@@ -80,7 +80,7 @@ end
 local function stopAll()
 	for _, track in pairs(tracks) do
 		if track and track.IsPlaying then
-			track:Stop(0.25)
+			track:Stop()
 		end
 	end
 end
@@ -314,14 +314,14 @@ RunService.RenderStepped:Connect(function(dt)
 		if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
 			stopAll()
 
-			-- Idle dominant blend
+			-- Combine hover + idle pose
 			tracks.idle1:Play()
 			tracks.idle1:AdjustWeight(1)
 			tracks.idle1:AdjustSpeed(1)
 
 			tracks.idleHover:Play()
 			tracks.idleHover:AdjustWeight(0.25)
-			tracks.idleHover:AdjustSpeed(0.8)
+			tracks.idleHover:AdjustSpeed(1)
 		end
 	end
 end)
@@ -345,5 +345,3 @@ createGui()
 bindInput()
 player.CharacterAdded:Connect(bindCharacter)
 bindCharacter()
-
-print("✅ Fly system loaded with idle + hover blend (no hover bob)")
