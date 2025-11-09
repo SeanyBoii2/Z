@@ -1,0 +1,126 @@
+-- Auto Humanoid Clicker (No Team Check, improved target detection)
+-- Place in StarterPlayerScripts
+
+_G.config = _G.config or {
+	HoldClick = true,               -- Hold left mouse button instead of single click
+	Hotkey = Enum.KeyCode.K,        -- Toggle key
+	HotkeyToggle = true,            -- True = press once to toggle, False = hold hotkey to stay on
+	NotificationsEnabled = true     -- Show in-game notifications
+}
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+_G.TriggerBotState = _G.TriggerBotState or {
+	triggerBotEnabled = false,
+	holdingKey = false,
+	loadedOnce = false
+}
+local state = _G.TriggerBotState
+
+local function notify(msg)
+	if _G.config.NotificationsEnabled then
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "TriggerBot",
+				Text = msg,
+				Duration = 2
+			})
+		end)
+	end
+end
+
+-- one-time loaded message
+if not state.loadedOnce then
+	state.loadedOnce = true
+	notify("TriggerBot Loaded ✅")
+end
+
+-- toggle handling
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.KeyCode == _G.config.Hotkey then
+		if _G.config.HotkeyToggle then
+			state.triggerBotEnabled = not state.triggerBotEnabled
+			notify(state.triggerBotEnabled and "AutoClick: ON" or "AutoClick: OFF")
+		else
+			state.triggerBotEnabled = true
+			state.holdingKey = true
+			notify("AutoClick: ON (Hold)")
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gpe)
+	if gpe then return end
+	if input.KeyCode == _G.config.Hotkey and not _G.config.HotkeyToggle then
+		state.triggerBotEnabled = false
+		state.holdingKey = false
+		notify("AutoClick: OFF")
+	end
+end)
+
+-- helper: click at cursor
+local function clickAtCursor(down)
+	local pos = UserInputService:GetMouseLocation()
+	-- Send to nil context so it reaches the client
+	VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, down, nil, 0)
+end
+
+-- helper: find humanoid from any targeted part (walk up the ancestry)
+local function findHumanoidFromPart(part)
+	if not part then return nil end
+	local model = part:FindFirstAncestorOfClass("Model")
+	if not model then return nil end
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	return humanoid, model
+end
+
+-- main loop (runs every frame)
+RunService.RenderStepped:Connect(function()
+	if not state.triggerBotEnabled then
+		-- ensure no held click
+		if _G.config.HoldClick then clickAtCursor(false) end
+		return
+	end
+
+	local targetPart = mouse.Target
+	if not targetPart then
+		if _G.config.HoldClick then clickAtCursor(false) end
+		return
+	end
+
+	local humanoid, charModel = findHumanoidFromPart(targetPart)
+	-- if no humanoid found, stop holding
+	if not humanoid then
+		if _G.config.HoldClick then clickAtCursor(false) end
+		return
+	end
+
+	-- alive check
+	if humanoid.Health <= 0 then
+		if _G.config.HoldClick then clickAtCursor(false) end
+		return
+	end
+
+	-- passed all checks -> click
+	if _G.config.HoldClick then
+		clickAtCursor(true)
+	else
+		clickAtCursor(true)
+		clickAtCursor(false)
+	end
+end)
+
+-- respawn handling
+player.CharacterAdded:Connect(function()
+	task.wait(1000) -- short delay
+	if state.triggerBotEnabled then
+		notify("TriggerBot Active ✅")
+	end
+end)
