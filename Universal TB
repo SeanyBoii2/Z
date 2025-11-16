@@ -1,11 +1,6 @@
--- Auto Humanoid Clicker (No Team Check, improved target detection)
--- Place in StarterPlayerScripts
-
+-- TriggerBot — Instant, Ultra Low-Lag, Skips Legs + Robust SAME-PARENT EXCLUSION
 _G.config = _G.config or {
-	HoldClick = true,               -- Hold left mouse button instead of single click
-	Hotkey = Enum.KeyCode.K,        -- Toggle key
-	HotkeyToggle = true,            -- True = press once to toggle, False = hold hotkey to stay on
-	NotificationsEnabled = true     -- Show in-game notifications
+	HoldClick = true
 }
 
 local Players = game:GetService("Players")
@@ -17,110 +12,124 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 _G.TriggerBotState = _G.TriggerBotState or {
-	triggerBotEnabled = false,
-	holdingKey = false,
-	loadedOnce = false
+	triggerBotEnabled = true,
+	clicking = false
 }
 local state = _G.TriggerBotState
 
-local function notify(msg)
-	if _G.config.NotificationsEnabled then
-		pcall(function()
-			game.StarterGui:SetCore("SendNotification", {
-				Title = "TriggerBot",
-				Text = msg,
-				Duration = 2
-			})
-		end)
+------------------------------------------------------------
+-- Right-click detection ONLY
+------------------------------------------------------------
+local rightDown = false
+UserInputService.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton2 then
+		rightDown = true
 	end
-end
-
--- one-time loaded message
-if not state.loadedOnce then
-	state.loadedOnce = true
-	notify("TriggerBot Loaded ✅")
-end
-
--- toggle handling
-UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == _G.config.Hotkey then
-		if _G.config.HotkeyToggle then
-			state.triggerBotEnabled = not state.triggerBotEnabled
-			notify(state.triggerBotEnabled and "AutoClick: ON" or "AutoClick: OFF")
-		else
-			state.triggerBotEnabled = true
-			state.holdingKey = true
-			notify("AutoClick: ON (Hold)")
-		end
+end)
+UserInputService.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton2 then
+		rightDown = false
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == _G.config.Hotkey and not _G.config.HotkeyToggle then
-		state.triggerBotEnabled = false
-		state.holdingKey = false
-		notify("AutoClick: OFF")
-	end
-end)
+------------------------------------------------------------
+-- CLICK sender (debounced)
+------------------------------------------------------------
+local function setClick(wantDown)
+	if state.clicking == wantDown then return end
+	state.clicking = wantDown
 
--- helper: click at cursor
-local function clickAtCursor(down)
 	local pos = UserInputService:GetMouseLocation()
-	-- Send to nil context so it reaches the client
-	VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, down, nil, 0)
+	VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, wantDown, nil, 0)
 end
 
--- helper: find humanoid from any targeted part (walk up the ancestry)
-local function findHumanoidFromPart(part)
-	if not part then return nil end
+------------------------------------------------------------
+-- Allowed body parts (skip legs)
+------------------------------------------------------------
+local allowedParts = {
+	Head = true,
+	UpperTorso = true,
+	LowerTorso = true,
+	HumanoidRootPart = true,
+
+	RightUpperArm = true,
+	RightLowerArm = true,
+	RightHand = true,
+	LeftUpperArm = true,
+	LeftLowerArm = true,
+	LeftHand = true,
+
+	["Left Arm"] = true,
+	["Right Arm"] = true,
+}
+
+local function isAllowedPart(part)
+	return part and allowedParts[part.Name] == true
+end
+
+------------------------------------------------------------
+-- ROBUST SAME-PARENT EXCLUSION (uses IsDescendantOf)
+------------------------------------------------------------
+local function getCharacterParent()
+	local char = player.Character
+	if not char then return nil end
+	return char.Parent
+end
+
+local function isSiblingHumanoid(model)
+	local char = player.Character
+	if not char or not model then return false end
+
+	local parent = getCharacterParent()
+	if not parent then return false end
+
+	-- Exclude if the target model is the same as our character
+	if model == char then return true end
+
+	-- Exclude if the target model is anywhere *inside* our character's parent container
+	-- (this handles nested folders like Workspace.Teams.TeamRed.YourCharacter)
+	if model:IsDescendantOf(parent) then
+		return true
+	end
+
+	return false
+end
+
+------------------------------------------------------------
+-- Validate humanoid but ignore legs + ignore same-parent
+------------------------------------------------------------
+local function getValidHumanoid(part)
+	if not part or not isAllowedPart(part) then return end
+
 	local model = part:FindFirstAncestorOfClass("Model")
-	if not model then return nil end
+	if not model then return end
+
+	-- don't target self or stuff in same parent container
+	if isSiblingHumanoid(model) then
+		return nil
+	end
+
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	return humanoid, model
+	if humanoid and humanoid.Health > 0 then
+		return humanoid
+	end
 end
 
--- main loop (runs every frame)
-RunService.RenderStepped:Connect(function()
-	if not state.triggerBotEnabled then
-		-- ensure no held click
-		if _G.config.HoldClick then clickAtCursor(false) end
+------------------------------------------------------------
+-- MAIN LOOP — 30Hz, instant reaction
+------------------------------------------------------------
+RunService.Heartbeat:Connect(function()
+	if not rightDown then
+		setClick(false)
 		return
 	end
 
-	local targetPart = mouse.Target
-	if not targetPart then
-		if _G.config.HoldClick then clickAtCursor(false) end
-		return
-	end
+	local part = mouse.Target
+	local humanoid = getValidHumanoid(part)
 
-	local humanoid, charModel = findHumanoidFromPart(targetPart)
-	-- if no humanoid found, stop holding
-	if not humanoid then
-		if _G.config.HoldClick then clickAtCursor(false) end
-		return
-	end
-
-	-- alive check
-	if humanoid.Health <= 0 then
-		if _G.config.HoldClick then clickAtCursor(false) end
-		return
-	end
-
-	-- passed all checks -> click
-	if _G.config.HoldClick then
-		clickAtCursor(true)
+	if humanoid then
+		setClick(true)
 	else
-		clickAtCursor(true)
-		clickAtCursor(false)
-	end
-end)
-
--- respawn handling
-player.CharacterAdded:Connect(function()
-	task.wait(1000) -- short delay
-	if state.triggerBotEnabled then
-		notify("TriggerBot Active ✅")
+		setClick(false)
 	end
 end)
