@@ -1,6 +1,10 @@
--- TriggerBot — Instant, Ultra Low-Lag, Skips Legs + Robust SAME-PARENT EXCLUSION
+-- TriggerBot — Ultra Low-Lag, Instant Fire, Folder-Based Team Exclusion (old behavior)
 _G.config = _G.config or {
-	HoldClick = true
+	HoldClick = true,
+	-- "folder" = exclude anything in the same parent container as your character (old behavior)
+	-- "team"   = use Player.Team comparison (safer in many games)
+	-- "none"   = no team/folder exclusion (only excludes your own character)
+	TeamExclusionMode = "none"
 }
 
 local Players = game:GetService("Players")
@@ -12,13 +16,12 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 _G.TriggerBotState = _G.TriggerBotState or {
-	triggerBotEnabled = true,
 	clicking = false
 }
 local state = _G.TriggerBotState
 
 ------------------------------------------------------------
--- Right-click detection ONLY
+-- Right mouse button detection
 ------------------------------------------------------------
 local rightDown = false
 UserInputService.InputBegan:Connect(function(i)
@@ -33,18 +36,22 @@ UserInputService.InputEnded:Connect(function(i)
 end)
 
 ------------------------------------------------------------
--- CLICK sender (debounced)
+-- Optimized click sender (debounced)
 ------------------------------------------------------------
-local function setClick(wantDown)
-	if state.clicking == wantDown then return end
-	state.clicking = wantDown
+local lastX, lastY = 0, 0
+RunService.RenderStepped:Connect(function()
+	local v = UserInputService:GetMouseLocation()
+	lastX, lastY = v.X, v.Y
+end)
 
-	local pos = UserInputService:GetMouseLocation()
-	VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, wantDown, nil, 0)
+local function setClick(down)
+	if state.clicking == down then return end
+	state.clicking = down
+	VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, down, nil, 0)
 end
 
 ------------------------------------------------------------
--- Allowed body parts (skip legs)
+-- Allowed body parts (no legs)
 ------------------------------------------------------------
 local allowedParts = {
 	Head = true,
@@ -68,45 +75,101 @@ local function isAllowedPart(part)
 end
 
 ------------------------------------------------------------
--- ROBUST SAME-PARENT EXCLUSION (uses IsDescendantOf)
+-- Exclude only MY character helper
 ------------------------------------------------------------
-local function getCharacterParent()
+local function isMyCharacter(model)
 	local char = player.Character
-	if not char then return nil end
-	return char.Parent
+	return char ~= nil and model == char
 end
 
-local function isSiblingHumanoid(model)
+------------------------------------------------------------
+-- Robust model finder: works on accessories, meshes, clothing
+------------------------------------------------------------
+local function getCharacterModelFromPart(part)
+	if not part then return nil end
+
+	-- Direct Model ancestor
+	local model = part:FindFirstAncestorOfClass("Model")
+	if model then
+		local hum = model:FindFirstChildOfClass("Humanoid")
+		if hum then
+			return model
+		end
+	end
+
+	-- Accessory → Model
+	local acc = part:FindFirstAncestorOfClass("Accessory")
+	if acc and acc.Parent then
+		local parentModel = acc.Parent
+		local hum = parentModel:FindFirstChildOfClass("Humanoid")
+		if hum then
+			return parentModel
+		end
+	end
+
+	return nil
+end
+
+------------------------------------------------------------
+-- Folder-based exclusion (ONLY used when mode="folder")
+------------------------------------------------------------
+local function isInSameParentContainer(model)
 	local char = player.Character
-	if not char or not model then return false end
+	if not char then return false end
 
-	local parent = getCharacterParent()
-	if not parent then return false end
+	local parentFolder = char.Parent
+	if not parentFolder then return false end
 
-	-- Exclude if the target model is the same as our character
-	if model == char then return true end
-
-	-- Exclude if the target model is anywhere *inside* our character's parent container
-	-- (this handles nested folders like Workspace.Teams.TeamRed.YourCharacter)
-	if model:IsDescendantOf(parent) then
+	-- Model is literally my character
+	if model == char then
 		return true
 	end
 
-	return false
+	-- Inside same team folder
+	return model:IsDescendantOf(parentFolder)
 end
 
 ------------------------------------------------------------
--- Validate humanoid but ignore legs + ignore same-parent
+-- Team check (ONLY used when mode="team")
+------------------------------------------------------------
+local function isTeammate(model)
+	local plr = Players:GetPlayerFromCharacter(model)
+	if not plr then return false end
+
+	local myTeam = player.Team
+	if not myTeam then return false end
+
+	return plr.Team == myTeam
+end
+
+------------------------------------------------------------
+-- Validate humanoid & apply exclusion according to mode
 ------------------------------------------------------------
 local function getValidHumanoid(part)
 	if not part or not isAllowedPart(part) then return end
 
-	local model = part:FindFirstAncestorOfClass("Model")
+	local model = getCharacterModelFromPart(part)
 	if not model then return end
 
-	-- don't target self or stuff in same parent container
-	if isSiblingHumanoid(model) then
+	-- Always exclude ONLY my own character
+	if isMyCharacter(model) then
 		return nil
+	end
+
+	local mode = _G.config.TeamExclusionMode
+
+	if mode == "folder" then
+		if isInSameParentContainer(model) then
+			return nil
+		end
+
+	elseif mode == "team" then
+		if isTeammate(model) then
+			return nil
+		end
+
+	elseif mode == "none" then
+		-- absolutely no exclusions
 	end
 
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -116,20 +179,24 @@ local function getValidHumanoid(part)
 end
 
 ------------------------------------------------------------
--- MAIN LOOP — 30Hz, instant reaction
+-- MAIN LOOP — super optimized (no lag)
 ------------------------------------------------------------
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function()
 	if not rightDown then
-		setClick(false)
+		if state.clicking then setClick(false) end
 		return
 	end
 
-	local part = mouse.Target
-	local humanoid = getValidHumanoid(part)
-
-	if humanoid then
+	if getValidHumanoid(mouse.Target) then
 		setClick(true)
 	else
-		setClick(false)
+		if state.clicking then setClick(false) end
 	end
 end)
+
+------------------------------------------------------------
+-- Optional runtime mode switching:
+-- _G.config.TeamExclusionMode = "team"
+-- _G.config.TeamExclusionMode = "folder"
+-- _G.config.TeamExclusionMode = "none"
+------------------------------------------------------------
