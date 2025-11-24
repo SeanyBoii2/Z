@@ -5,15 +5,15 @@ local RunService = game:GetService("RunService")
 
 -- CONFIG
 local TAG_NAME = "HitboxProcessed"
-local PART_NAMES = {"Head", "UpperTorso"} -- alternate between these
+local PART_NAMES = {"Head"} -- alternate between these
 local HITBOX_SIZE = Vector3.new(8, 8, 8)
-local TARGET_FOLDER_NAME = "Mobs"
-local HITBOX_TRANSPARENCY = 0.9
+local TARGET_FOLDER_NAME = "ServerZombies"
+local HITBOX_TRANSPARENCY = 0.99
 local HIGHLIGHT_COLOR = Color3.fromRGB(255, 0, 0)
 
 -- TOGGLES
 local highlightEnabled = false
-local playersEnabled = true
+local playersEnabled = false
 
 -- Local player
 local localPlayer = Players.LocalPlayer
