@@ -1,0 +1,104 @@
+--// Enemy Highlighter (Outline Only + Persistent + Optimized)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local Highlights = {} -- cache for active highlights
+
+--// CONFIG
+local OUTLINE_COLOR = Color3.fromRGB(255, 0, 0)
+local OUTLINE_TRANSPARENCY = 0
+local FILL_TRANSPARENCY = 1 -- invisible fill (outline only)
+
+--// Check if player is an enemy
+local function isEnemy(player)
+	if not player.Team or not LocalPlayer.Team then return false end
+	return player.Team ~= LocalPlayer.Team
+end
+
+--// Add a highlight
+local function addHighlight(player)
+	local character = player.Character
+	if not character then return end
+
+	if Highlights[player] then
+		if Highlights[player].Parent ~= character then
+			Highlights[player]:Destroy()
+			Highlights[player] = nil
+		else
+			return
+		end
+	end
+
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "EnemyHighlight"
+	highlight.FillTransparency = FILL_TRANSPARENCY
+	highlight.OutlineTransparency = OUTLINE_TRANSPARENCY
+	highlight.OutlineColor = OUTLINE_COLOR
+	highlight.Adornee = character
+	highlight.Parent = character
+	Highlights[player] = highlight
+end
+
+--// Remove a highlight
+local function removeHighlight(player)
+	if Highlights[player] then
+		Highlights[player]:Destroy()
+		Highlights[player] = nil
+	end
+end
+
+--// Refresh one player
+local function refreshPlayer(player)
+	if player == LocalPlayer then return end
+	if isEnemy(player) then
+		if player.Character then
+			addHighlight(player)
+		end
+	else
+		removeHighlight(player)
+	end
+end
+
+--// Refresh all
+local function refreshAll()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		refreshPlayer(plr)
+	end
+end
+
+--// Setup player signals
+local function setupPlayerConnections(player)
+	player.CharacterAdded:Connect(function()
+		task.wait(0.3)
+		refreshPlayer(player)
+	end)
+
+	player:GetPropertyChangedSignal("Team"):Connect(function()
+		task.wait(0.1)
+		refreshPlayer(player)
+	end)
+end
+
+--// Player events
+Players.PlayerAdded:Connect(function(player)
+	setupPlayerConnections(player)
+	task.defer(refreshAll)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	removeHighlight(player)
+end)
+
+-- Local team changes
+LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+	task.defer(refreshAll)
+end)
+
+-- Init existing players
+for _, player in ipairs(Players:GetPlayers()) do
+	if player ~= LocalPlayer then
+		setupPlayerConnections(player)
+	end
+end
+
+refreshAll()
