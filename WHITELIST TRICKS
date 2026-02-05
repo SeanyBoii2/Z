@@ -3,7 +3,7 @@
 --================================--
 local WHITELISTED_USERS = {
     "ULTIMATEGODLUFFY",        -- Owner
-    "1",
+    "1TrapYt",
 }
 --================================--
 local Players = game:GetService("Players")
