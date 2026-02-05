@@ -1,1 +1,33 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/mizu-dump/Lua2Loadstring/refs/heads/main/Main/Loader.lua"))()
+--================================--
+--       WHITELIST SYSTEM         --
+--================================--
+local WHITELISTED_USERS = {
+    "spookyie",        -- Owner
+    -- Add more usernames below:
+    -- "PlayerName1",
+    -- "PlayerName2",
+}
+--================================--
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local isWhitelisted = false
+for _, name in ipairs(WHITELISTED_USERS) do
+    if string.lower(player.Name) == string.lower(name) then
+        isWhitelisted = true
+        break
+    end
+end
+
+if isWhitelisted then
+    -- Load the script
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Motorcycle%20Tricks%20Universal"))()
+else
+    -- Access denied notification
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "⛔ ACCESS DENIED",
+        Text = "You are not whitelisted. Discord: spookyie",
+        Duration = 5
+    })
+end
