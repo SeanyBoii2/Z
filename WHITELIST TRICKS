@@ -2,10 +2,8 @@
 --       WHITELIST SYSTEM         --
 --================================--
 local WHITELISTED_USERS = {
-    "spookyie",        -- Owner
-    -- Add more usernames below:
-    -- "PlayerName1",
-    -- "PlayerName2",
+    "ULTIMATEGODLUFFY",        -- Owner
+    "1",
 }
 --================================--
 
