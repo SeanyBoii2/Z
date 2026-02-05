@@ -6,10 +6,8 @@ local WHITELISTED_USERS = {
     "1",
 }
 --================================--
-
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-
 local isWhitelisted = false
 for _, name in ipairs(WHITELISTED_USERS) do
     if string.lower(player.Name) == string.lower(name) then
@@ -17,8 +15,13 @@ for _, name in ipairs(WHITELISTED_USERS) do
         break
     end
 end
-
 if isWhitelisted then
+    -- Welcome notification
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "✅ WELCOME",
+        Text = "Welcome " .. player.Name .. "!",
+        Duration = 5
+    })
     -- Load the script
     loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Motorcycle%20Tricks%20Universal"))()
 else
