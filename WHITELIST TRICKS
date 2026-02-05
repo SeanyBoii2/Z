@@ -2,33 +2,45 @@
 --       WHITELIST SYSTEM         --
 --================================--
 local WHITELISTED_USERS = {
-    "ULTIMATEGODLUFFY",        -- Owner
+    "ULTIMATEGODLUFFY",
     "1TtrapYt",
 }
 --================================--
 local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
 local player = Players.LocalPlayer
+
+-- Wait for notification system to be ready
+local function sendNotification(title, text)
+    for i = 1, 10 do
+        local success = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 5
+            })
+        end)
+        if success then break end
+        task.wait(0.5)
+    end
+end
+
+-- Debug: Print the player name to console
+print("Player Name: " .. player.Name)
+
 local isWhitelisted = false
 for _, name in ipairs(WHITELISTED_USERS) do
+    print("Checking: " .. string.lower(name) .. " vs " .. string.lower(player.Name))
     if string.lower(player.Name) == string.lower(name) then
         isWhitelisted = true
         break
     end
 end
+
 if isWhitelisted then
-    -- Welcome notification
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "✅ WELCOME",
-        Text = "Welcome " .. player.Name .. "!",
-        Duration = 5
-    })
-    -- Load the script
+    sendNotification("✅ WELCOME", "Welcome " .. player.Name .. "!")
     loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Motorcycle%20Tricks%20Universal"))()
 else
-    -- Access denied notification
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "⛔ ACCESS DENIED",
-        Text = "You are not whitelisted. Discord: spookyie",
-        Duration = 5
-    })
+    sendNotification("⛔ ACCESS DENIED", "You are not whitelisted. Discord: spookyie")
+    print("ACCESS DENIED - Username not in whitelist: " .. player.Name)
 end
