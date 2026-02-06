@@ -295,7 +295,7 @@ local loadedScripts = {} -- track which scripts are loaded
 for i, scriptData in ipairs(SCRIPTS) do
 	local Card = Instance.new("Frame")
 	Card.Name = "Card_" .. scriptData.Name
-	Card.Size = UDim2.new(1, 0, 0, 72)
+	Card.Size = UDim2.new(1, 0, 0, 82)
 	Card.BackgroundColor3 = Theme.Card
 	Card.BorderSizePixel = 0
 	Card.LayoutOrder = i
@@ -332,7 +332,7 @@ for i, scriptData in ipairs(SCRIPTS) do
 
 	-- Description
 	local DescLabel = Instance.new("TextLabel")
-	DescLabel.Size = UDim2.new(1, -150, 0, 16)
+	DescLabel.Size = UDim2.new(1, -80, 0, 28)
 	DescLabel.Position = UDim2.new(0, 66, 0, 36)
 	DescLabel.BackgroundTransparency = 1
 	DescLabel.Text = scriptData.Description
@@ -340,7 +340,7 @@ for i, scriptData in ipairs(SCRIPTS) do
 	DescLabel.TextSize = 11
 	DescLabel.Font = Enum.Font.Gotham
 	DescLabel.TextXAlignment = Enum.TextXAlignment.Left
-	DescLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	DescLabel.TextWrapped = true
 	DescLabel.Parent = Card
 
 	-- Load Button
@@ -435,7 +435,7 @@ Footer.Parent = ContentFrame
 -- Calculate target height
 local totalHeight = 48 + 12 + 52 + 8 + 22  -- titlebar + top pad + welcome + gap + section label
 for _, scriptData in ipairs(SCRIPTS) do
-	totalHeight += 72 + 8  -- card + gap
+	totalHeight += 82 + 8  -- card + gap
 end
 totalHeight += 28 + 12  -- footer + bottom pad
 totalHeight = math.min(totalHeight, 420) -- max height cap
