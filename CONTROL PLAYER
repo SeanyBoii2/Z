@@ -4,7 +4,7 @@ local TextChatService = game:GetService("TextChatService")
 local LocalPlayer = Players.LocalPlayer
 
 -- change this to the display name (or username) you want to listen to
-local ownerDisplayName = "Superman"
+local ownerDisplayName = "Fire"
 
 local function getSelf()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
