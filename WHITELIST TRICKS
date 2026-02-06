@@ -22,6 +22,12 @@ local SCRIPTS = {
 		Icon = "🦸",
 		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Superman%20Fly%202%20updated",
 	},
+	{
+		Name = "NPC Autofarm",
+		Description = "Automatically farm NPCs with targeting and auto kill",
+		Icon = "🎯",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Universal%20Npc%20Autofarm",
+	},
 }
 
 --================================--
@@ -438,7 +444,7 @@ for _, scriptData in ipairs(SCRIPTS) do
 	totalHeight += 82 + 8  -- card + gap
 end
 totalHeight += 28 + 12  -- footer + bottom pad
-totalHeight = math.min(totalHeight, 420) -- max height cap
+totalHeight = math.min(totalHeight, 500) -- max height cap
 
 -- Open animation
 MainFrame.BackgroundTransparency = 1
