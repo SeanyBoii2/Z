@@ -19,6 +19,7 @@
 
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -43,1496 +44,1265 @@ local autoSteerEnabled = false
 local autoSteerConnection = nil
 local waypointMarker = nil
 local waypointPosition = nil
-local mouseWheelControlEnabled = false -- Toggle for mouse wheel angle control
-local activationKey = Enum.KeyCode.LeftControl -- Default keybind (can be LeftControl or LeftShift)
-local MOUSE_WHEEL_SENSITIVITY = 8 -- How many degrees per scroll
-local autoSwitchEnabled = false -- Toggle for auto wheelie/stoppie switch with Alt
-local backHopConnection = nil -- Connection for back hop loop
+local mouseWheelControlEnabled = false
+local activationKey = Enum.KeyCode.LeftControl
+local MOUSE_WHEEL_SENSITIVITY = 8
+local autoSwitchEnabled = false
+local backHopConnection = nil
 
--- Mode settings (configurable via GUI)
+-- Mode settings
 local modeSettings = {
-    Wheelie = {
-        angle = 45,
-        minAngle = 10,
-        maxAngle = 80  -- Back to 80
-    },
-    Stoppie = {
-        angle = 45,
-        minAngle = 10,
-        maxAngle = 80  -- Back to 80
-    },
-    SideWheelie = {
-        angle = 45,
-        minAngle = 10,
-        maxAngle = 80,
-        tilt = 30,  -- Side tilt angle
-        minTilt = 10,
-        maxTilt = 60
-    },
-    BackHop = {
-        angle = 55,  -- Wheelie angle while hopping
-        hopPower = 30,  -- How high each hop is
-        minHopPower = 15,
-        maxHopPower = 80,
-        hopInterval = 0.4  -- Time between hops
-    },
-    Jump = {
-        power = 50,
-        minPower = 50,
-        maxPower = 300
-    },
-    Backflip = {
-        speed = 3,
-        minSpeed = 1,
-        maxSpeed = 8
-    },
-    Frontflip = {
-        speed = 3,
-        minSpeed = 1,
-        maxSpeed = 8
-    },
-    AutoSteer = {
-        strength = 5,
-        minStrength = 1,
-        maxStrength = 10  -- Controls steering force toward waypoint
-    }
+	Wheelie = { angle = 45, minAngle = 10, maxAngle = 80 },
+	Stoppie = { angle = 45, minAngle = 10, maxAngle = 80 },
+	SideWheelie = { angle = 45, minAngle = 10, maxAngle = 80, tilt = 30, minTilt = 10, maxTilt = 60 },
+	BackHop = { angle = 55, hopPower = 30, minHopPower = 15, maxHopPower = 80, hopInterval = 0.4 },
+	Jump = { power = 50, minPower = 50, maxPower = 300 },
+	Backflip = { speed = 3, minSpeed = 1, maxSpeed = 8 },
+	Frontflip = { speed = 3, minSpeed = 1, maxSpeed = 8 },
+	AutoSteer = { strength = 5, minStrength = 1, maxStrength = 10 }
 }
 
--- Find vehicle function (works for both motorcycle and car)
+------------------------------------------------------
+--               VEHICLE LOGIC (unchanged)          --
+------------------------------------------------------
+
 local function findMotorcycle()
-    -- Option 1: If the vehicle is a tool the player is using
-    local tool = character:FindFirstChildOfClass("Tool")
-    if tool then
-        return tool
-    end
-    
-    -- Option 2: If the vehicle is a VehicleSeat the player is sitting in
-    if character.Humanoid.SeatPart then
-        -- For cars, the seat parent is usually the car model
-        -- For motorcycles, same logic applies
-        return character.Humanoid.SeatPart.Parent
-    end
-    
-    return nil
+	local tool = character:FindFirstChildOfClass("Tool")
+	if tool then return tool end
+	if character.Humanoid.SeatPart then
+		return character.Humanoid.SeatPart.Parent
+	end
+	return nil
 end
 
--- Perform trick function
 local function doTrick()
-    -- Handle Jump mode
-    if currentMode == "Jump" then
-        motorcycle = findMotorcycle()
-        if not motorcycle then return end
-        
-        local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-        if not mainPart then return end
-        
-        -- Apply upward force for jump
-        local bodyVelocity = Instance.new("BodyVelocity")
-        bodyVelocity.Name = "JumpVelocity"
-        bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
-        bodyVelocity.Velocity = Vector3.new(0, modeSettings.Jump.power, 0)
-        bodyVelocity.Parent = mainPart
-        
-        -- Remove velocity after a short duration
-        task.delay(0.2, function()
-            if bodyVelocity and bodyVelocity.Parent then
-                bodyVelocity:Destroy()
-            end
-        end)
-        
-        return
-    end
-    
-    -- Handle Backflip mode
-    if currentMode == "Backflip" then
-        motorcycle = findMotorcycle()
-        if not motorcycle then return end
-        
-        local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-        if not mainPart then return end
-        
-        -- Create BodyAngularVelocity for continuous backflip rotation
-        local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-        bodyAngularVelocity.Name = "FlipVelocity"
-        bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-        bodyAngularVelocity.AngularVelocity = Vector3.new(modeSettings.Backflip.speed, 0, 0) -- Positive X = backflip
-        bodyAngularVelocity.P = 10000
-        bodyAngularVelocity.Parent = mainPart
-        
-        -- Store reference for cleanup
-        bodyGyro = bodyAngularVelocity
-        
-        return
-    end
-    
-    -- Handle BackHop mode - wheelie with repeated hops
-    if currentMode == "BackHop" then
-        motorcycle = findMotorcycle()
-        if not motorcycle then return end
-        
-        local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-        if not mainPart then return end
-        
-        -- Create BodyGyro for wheelie angle
-        if not bodyGyro or not bodyGyro.Parent then
-            bodyGyro = Instance.new("BodyGyro")
-            bodyGyro.Name = "BackHopGyro"
-            bodyGyro.MaxTorque = Vector3.new(GYRO_POWER, GYRO_POWER, GYRO_POWER)
-            bodyGyro.P = GYRO_POWER
-            bodyGyro.D = GYRO_DAMPING
-            bodyGyro.Parent = mainPart
-        end
-        
-        -- Get initial rotation
-        local initialCFrame = mainPart.CFrame
-        local _, initialY, _ = initialCFrame:ToOrientation()
-        
-        -- Disconnect old hop connection
-        if backHopConnection then
-            backHopConnection:Disconnect()
-        end
-        
-        -- Start hopping loop
-        local lastHopTime = 0
-        backHopConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if not isActive or currentMode ~= "BackHop" then
-                if backHopConnection then
-                    backHopConnection:Disconnect()
-                    backHopConnection = nil
-                end
-                return
-            end
-            
-            if not mainPart or not mainPart.Parent then return end
-            
-            -- Keep wheelie angle
-            local wheelieAngle = modeSettings.BackHop.angle
-            local targetCFrame = CFrame.new(mainPart.Position) * CFrame.Angles(0, initialY, 0) * CFrame.Angles(math.rad(wheelieAngle), 0, 0)
-            
-            if bodyGyro and bodyGyro.Parent then
-                bodyGyro.CFrame = targetCFrame
-            end
-            
-            -- Hop at intervals
-            local currentTime = tick()
-            if currentTime - lastHopTime >= modeSettings.BackHop.hopInterval then
-                lastHopTime = currentTime
-                
-                -- Apply upward hop force
-                local currentVel = mainPart.AssemblyLinearVelocity
-                mainPart.AssemblyLinearVelocity = Vector3.new(
-                    currentVel.X,
-                    modeSettings.BackHop.hopPower,
-                    currentVel.Z
-                )
-            end
-        end)
-        
-        return
-    end
-    
-    -- Handle Frontflip mode
-    if currentMode == "Frontflip" then
-        motorcycle = findMotorcycle()
-        if not motorcycle then return end
-        
-        local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-        if not mainPart then return end
-        
-        -- Create BodyAngularVelocity for continuous frontflip rotation
-        local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-        bodyAngularVelocity.Name = "FlipVelocity"
-        bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-        bodyAngularVelocity.AngularVelocity = Vector3.new(-modeSettings.Frontflip.speed, 0, 0) -- Negative X = frontflip
-        bodyAngularVelocity.P = 10000
-        bodyAngularVelocity.Parent = mainPart
-        
-        -- Store reference for cleanup
-        bodyGyro = bodyAngularVelocity
-        
-        return
-    end
-    
-    -- Handle Auto-Steer mode (Mouse-Guided)
-    if currentMode == "AutoSteer" then
-        autoSteerEnabled = true
-        
-        -- Create Auto-Steer loop
-        if autoSteerConnection then
-            autoSteerConnection:Disconnect()
-        end
-        
-        -- Throttle counter for performance
-        local frameCounter = 0
-        local UPDATE_INTERVAL = 6 -- Only update every 6 frames (optimized for less lag)
-        
-        -- Cache raycast params (create once, reuse)
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-        
-        -- Cache motorcycle and mainPart references
-        local cachedMotorcycle = nil
-        local cachedMainPart = nil
-        local lastCacheUpdate = 0
-        local CACHE_UPDATE_INTERVAL = 30 -- Refresh cache every 30 frames
-        
-        autoSteerConnection = game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
-            if not autoSteerEnabled then
-                if autoSteerConnection then
-                    autoSteerConnection:Disconnect()
-                    autoSteerConnection = nil
-                end
-                return
-            end
-            
-            -- Only steer if we have a waypoint
-            if not waypointPosition then return end
-            
-            -- Throttle updates for performance
-            frameCounter = frameCounter + 1
-            if frameCounter < UPDATE_INTERVAL then return end
-            frameCounter = 0
-            
-            -- Update cached references periodically
-            lastCacheUpdate = lastCacheUpdate + 1
-            if lastCacheUpdate >= CACHE_UPDATE_INTERVAL or not cachedMotorcycle or not cachedMainPart then
-                cachedMotorcycle = findMotorcycle()
-                if cachedMotorcycle then
-                    cachedMainPart = cachedMotorcycle:FindFirstChild("MainPart") or cachedMotorcycle.PrimaryPart
-                end
-                lastCacheUpdate = 0
-            end
-            
-            if not cachedMotorcycle or not cachedMainPart then return end
-            
-            local velocity = cachedMainPart.AssemblyLinearVelocity
-            if velocity.Magnitude < 3 then return end -- Only work when moving
-            
-            -- Calculate direction to waypoint
-            local directionToWaypoint = (waypointPosition - cachedMainPart.Position)
-            local distanceToWaypoint = directionToWaypoint.Magnitude
-            
-            -- If we're very close to waypoint, remove it and stop steering
-            if distanceToWaypoint < 20 then
-                -- Delete waypoint marker
-                if waypointMarker and waypointMarker.Parent then
-                    waypointMarker:Destroy()
-                end
-                waypointMarker = nil
-                waypointPosition = nil
-                return
-            end
-            
-            -- Flatten direction to horizontal plane for turning calculation
-            local directionFlat = Vector3.new(directionToWaypoint.X, 0, directionToWaypoint.Z).Unit
-            
-            -- Target direction is just the waypoint direction
-            local targetDirection = directionFlat
-            
-            -- Get current speed
-            local currentVelocity = cachedMainPart.AssemblyLinearVelocity
-            local horizontalSpeed = Vector3.new(currentVelocity.X, 0, currentVelocity.Z).Magnitude
-            
-            -- Calculate target Y rotation (turning direction)
-            local targetLookAt = CFrame.lookAt(Vector3.new(0, 0, 0), targetDirection)
-            local _, targetY, _ = targetLookAt:ToOrientation()
-            
-            -- Get current orientation - keep current pitch and roll, only change yaw
-            local currentCFrame = cachedMainPart.CFrame
-            local currentPitch, currentYaw, currentRoll = currentCFrame:ToOrientation()
-            
-            -- Get current position
-            local currentPos = cachedMainPart.Position
-            
-            -- Create CFrame with NEW yaw only, keep pitch and roll from physics
-            local newCFrame = CFrame.new(currentPos) * CFrame.Angles(currentPitch, targetY, currentRoll)
-            
-            -- INSTANT snap using PivotTo
-            cachedMotorcycle:PivotTo(newCFrame)
-            
-            -- Ground check for anti-float
-            rayParams.FilterDescendantsInstances = {character, cachedMotorcycle, waypointMarker}
-            local groundRay = workspace:Raycast(cachedMainPart.Position, Vector3.new(0, -5, 0), rayParams)
-            local isOnGround = groundRay ~= nil
-            
-            -- Update velocity - only change horizontal direction, let Y be natural
-            cachedMainPart.AssemblyLinearVelocity = Vector3.new(
-                targetDirection.X * horizontalSpeed,
-                currentVelocity.Y,
-                targetDirection.Z * horizontalSpeed
-            )
-        end)
-        
-        return
-    end
-    
-    -- Handle Wheelie and Stoppie modes
-    motorcycle = findMotorcycle()
-    if not motorcycle then return end
-    
-    local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-    if not mainPart then return end
-    
-    -- Check if this is a NEW vehicle (different from last time)
-    if originalNeutralCFrame then
-        -- If the saved CFrame position is very far from current vehicle, it's a new vehicle
-        local savedPos = originalNeutralCFrame.Position
-        local currentPos = mainPart.Position
-        local distance = (savedPos - currentPos).Magnitude
-        
-        if distance > 50 then
-            -- New vehicle detected - just reset the saved orientation
-            originalNeutralCFrame = nil
-        end
-    end
-    
-    -- Save the original neutral orientation if we don't have it yet
-    if not originalNeutralCFrame then
-        originalNeutralCFrame = mainPart.CFrame
-    end
-    
-    -- Create physics objects ONLY if they don't exist
-    if not bodyGyro or not bodyGyro.Parent then
-        -- Create BodyGyro for motorcycles
-        bodyGyro = Instance.new("BodyGyro")
-        bodyGyro.Name = "TrickGyro"
-        bodyGyro.MaxTorque = Vector3.new(GYRO_POWER, GYRO_POWER, GYRO_POWER)
-        bodyGyro.P = GYRO_POWER
-        bodyGyro.D = GYRO_DAMPING
-        bodyGyro.Parent = mainPart
-    else
-        -- Physics objects already exist - re-enable their MaxTorque
-        if bodyGyro:IsA("BodyGyro") then
-            bodyGyro.MaxTorque = Vector3.new(GYRO_POWER, GYRO_POWER, GYRO_POWER)
-        end
-    end
-    
-    -- Disconnect old connection if exists
-    if updateConnection then
-        updateConnection:Disconnect()
-    end
-    
-    -- Initialize target rotation
-    local initialCFrame = mainPart.CFrame
-    local _, initialY, _ = initialCFrame:ToOrientation()
-    targetYRotation = initialY
-    
-    -- Update loop
-    updateConnection = game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
-        -- CRITICAL: Stop immediately if not active
-        if not isActive then
-            if updateConnection then
-                updateConnection:Disconnect()
-                updateConnection = nil
-            end
-            -- Clean up physics objects
-            if bodyGyro and bodyGyro.Parent then
-                bodyGyro:Destroy()
-                bodyGyro = nil
-            end
-            if bodyPosition and bodyPosition.Parent then
-                bodyPosition:Destroy()
-                bodyPosition = nil
-            end
-            return
-        end
-        
-        if not mainPart or not mainPart.Parent then
-            if updateConnection then
-                updateConnection:Disconnect()
-                updateConnection = nil
-            end
-            return
-        end
-        
-        -- Get rotation input
-        local rotationInput = 0
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then
-            rotationInput = ROTATION_SPEED * deltaTime
-        elseif UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then
-            rotationInput = -ROTATION_SPEED * deltaTime
-        end
-        
-        targetYRotation = targetYRotation + rotationInput
-        
-        -- Get current mode angle
-        local trickAngle = modeSettings[currentMode].angle
-        
-        -- Create target CFrame based on mode
-        local targetCFrame = CFrame.new(mainPart.Position) * CFrame.Angles(0, targetYRotation, 0)
-        
-        if currentMode == "Wheelie" then
-            -- Wheelie: tilt back (front wheel up)
-            targetCFrame = targetCFrame * CFrame.Angles(math.rad(trickAngle), 0, 0)
-        elseif currentMode == "Stoppie" then
-            -- Stoppie: tilt forward (back wheel up)
-            targetCFrame = targetCFrame * CFrame.Angles(math.rad(-trickAngle), 0, 0)
-        elseif currentMode == "SideWheelie" then
-            -- SideWheelie: tilt back AND to the side
-            local tiltAngle = modeSettings.SideWheelie.tilt
-            targetCFrame = targetCFrame * CFrame.Angles(math.rad(trickAngle), 0, math.rad(tiltAngle))
-        end
-        
-        -- Apply orientation only if bodyGyro still exists
-        if bodyGyro and bodyGyro.Parent then
-            bodyGyro.CFrame = targetCFrame
-        else
-            -- BodyGyro was destroyed, stop the loop
-            if updateConnection then
-                updateConnection:Disconnect()
-                updateConnection = nil
-            end
-        end
-    end)
+	if currentMode == "Jump" then
+		motorcycle = findMotorcycle()
+		if not motorcycle then return end
+		local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+		if not mainPart then return end
+		local bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.Name = "JumpVelocity"
+		bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+		bodyVelocity.Velocity = Vector3.new(0, modeSettings.Jump.power, 0)
+		bodyVelocity.Parent = mainPart
+		task.delay(0.2, function()
+			if bodyVelocity and bodyVelocity.Parent then bodyVelocity:Destroy() end
+		end)
+		return
+	end
+
+	if currentMode == "Backflip" then
+		motorcycle = findMotorcycle()
+		if not motorcycle then return end
+		local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+		if not mainPart then return end
+		local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+		bodyAngularVelocity.Name = "FlipVelocity"
+		bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
+		bodyAngularVelocity.AngularVelocity = Vector3.new(modeSettings.Backflip.speed, 0, 0)
+		bodyAngularVelocity.P = 10000
+		bodyAngularVelocity.Parent = mainPart
+		bodyGyro = bodyAngularVelocity
+		return
+	end
+
+	if currentMode == "BackHop" then
+		motorcycle = findMotorcycle()
+		if not motorcycle then return end
+		local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+		if not mainPart then return end
+		if not bodyGyro or not bodyGyro.Parent then
+			bodyGyro = Instance.new("BodyGyro")
+			bodyGyro.Name = "BackHopGyro"
+			bodyGyro.MaxTorque = Vector3.new(GYRO_POWER, GYRO_POWER, GYRO_POWER)
+			bodyGyro.P = GYRO_POWER
+			bodyGyro.D = GYRO_DAMPING
+			bodyGyro.Parent = mainPart
+		end
+		local initialCFrame = mainPart.CFrame
+		local _, initialY, _ = initialCFrame:ToOrientation()
+		if backHopConnection then backHopConnection:Disconnect() end
+		local lastHopTime = 0
+		backHopConnection = RunService.Heartbeat:Connect(function()
+			if not isActive or currentMode ~= "BackHop" then
+				if backHopConnection then backHopConnection:Disconnect(); backHopConnection = nil end
+				return
+			end
+			if not mainPart or not mainPart.Parent then return end
+			local wheelieAngle = modeSettings.BackHop.angle
+			local targetCFrame = CFrame.new(mainPart.Position) * CFrame.Angles(0, initialY, 0) * CFrame.Angles(math.rad(wheelieAngle), 0, 0)
+			if bodyGyro and bodyGyro.Parent then bodyGyro.CFrame = targetCFrame end
+			local currentTime = tick()
+			if currentTime - lastHopTime >= modeSettings.BackHop.hopInterval then
+				lastHopTime = currentTime
+				local currentVel = mainPart.AssemblyLinearVelocity
+				mainPart.AssemblyLinearVelocity = Vector3.new(currentVel.X, modeSettings.BackHop.hopPower, currentVel.Z)
+			end
+		end)
+		return
+	end
+
+	if currentMode == "Frontflip" then
+		motorcycle = findMotorcycle()
+		if not motorcycle then return end
+		local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+		if not mainPart then return end
+		local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+		bodyAngularVelocity.Name = "FlipVelocity"
+		bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
+		bodyAngularVelocity.AngularVelocity = Vector3.new(-modeSettings.Frontflip.speed, 0, 0)
+		bodyAngularVelocity.P = 10000
+		bodyAngularVelocity.Parent = mainPart
+		bodyGyro = bodyAngularVelocity
+		return
+	end
+
+	if currentMode == "AutoSteer" then
+		autoSteerEnabled = true
+		if autoSteerConnection then autoSteerConnection:Disconnect() end
+		local frameCounter = 0
+		local UPDATE_INTERVAL = 6
+		local rayParams = RaycastParams.new()
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+		local cachedMotorcycle = nil
+		local cachedMainPart = nil
+		local lastCacheUpdate = 0
+		local CACHE_UPDATE_INTERVAL = 30
+		autoSteerConnection = RunService.Heartbeat:Connect(function(deltaTime)
+			if not autoSteerEnabled then
+				if autoSteerConnection then autoSteerConnection:Disconnect(); autoSteerConnection = nil end
+				return
+			end
+			if not waypointPosition then return end
+			frameCounter = frameCounter + 1
+			if frameCounter < UPDATE_INTERVAL then return end
+			frameCounter = 0
+			lastCacheUpdate = lastCacheUpdate + 1
+			if lastCacheUpdate >= CACHE_UPDATE_INTERVAL or not cachedMotorcycle or not cachedMainPart then
+				cachedMotorcycle = findMotorcycle()
+				if cachedMotorcycle then
+					cachedMainPart = cachedMotorcycle:FindFirstChild("MainPart") or cachedMotorcycle.PrimaryPart
+				end
+				lastCacheUpdate = 0
+			end
+			if not cachedMotorcycle or not cachedMainPart then return end
+			local velocity = cachedMainPart.AssemblyLinearVelocity
+			if velocity.Magnitude < 3 then return end
+			local directionToWaypoint = (waypointPosition - cachedMainPart.Position)
+			local distanceToWaypoint = directionToWaypoint.Magnitude
+			if distanceToWaypoint < 20 then
+				if waypointMarker and waypointMarker.Parent then waypointMarker:Destroy() end
+				waypointMarker = nil
+				waypointPosition = nil
+				return
+			end
+			local directionFlat = Vector3.new(directionToWaypoint.X, 0, directionToWaypoint.Z).Unit
+			local targetDirection = directionFlat
+			local currentVelocity = cachedMainPart.AssemblyLinearVelocity
+			local horizontalSpeed = Vector3.new(currentVelocity.X, 0, currentVelocity.Z).Magnitude
+			local targetLookAt = CFrame.lookAt(Vector3.new(0, 0, 0), targetDirection)
+			local _, targetY, _ = targetLookAt:ToOrientation()
+			local currentCFrame = cachedMainPart.CFrame
+			local currentPitch, currentYaw, currentRoll = currentCFrame:ToOrientation()
+			local currentPos = cachedMainPart.Position
+			local newCFrame = CFrame.new(currentPos) * CFrame.Angles(currentPitch, targetY, currentRoll)
+			cachedMotorcycle:PivotTo(newCFrame)
+			rayParams.FilterDescendantsInstances = {character, cachedMotorcycle, waypointMarker}
+			cachedMainPart.AssemblyLinearVelocity = Vector3.new(
+				targetDirection.X * horizontalSpeed,
+				currentVelocity.Y,
+				targetDirection.Z * horizontalSpeed
+			)
+		end)
+		return
+	end
+
+	-- Wheelie / Stoppie / SideWheelie
+	motorcycle = findMotorcycle()
+	if not motorcycle then return end
+	local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+	if not mainPart then return end
+	if originalNeutralCFrame then
+		local savedPos = originalNeutralCFrame.Position
+		local currentPos = mainPart.Position
+		if (savedPos - currentPos).Magnitude > 50 then originalNeutralCFrame = nil end
+	end
+	if not originalNeutralCFrame then originalNeutralCFrame = mainPart.CFrame end
+	if not bodyGyro or not bodyGyro.Parent then
+		bodyGyro = Instance.new("BodyGyro")
+		bodyGyro.Name = "TrickGyro"
+		bodyGyro.MaxTorque = Vector3.new(GYRO_POWER, GYRO_POWER, GYRO_POWER)
+		bodyGyro.P = GYRO_POWER
+		bodyGyro.D = GYRO_DAMPING
+		bodyGyro.Parent = mainPart
+	else
+		if bodyGyro:IsA("BodyGyro") then
+			bodyGyro.MaxTorque = Vector3.new(GYRO_POWER, GYRO_POWER, GYRO_POWER)
+		end
+	end
+	if updateConnection then updateConnection:Disconnect() end
+	local initialCFrame = mainPart.CFrame
+	local _, initialY, _ = initialCFrame:ToOrientation()
+	targetYRotation = initialY
+	updateConnection = RunService.Heartbeat:Connect(function(deltaTime)
+		if not isActive then
+			if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+			if bodyGyro and bodyGyro.Parent then bodyGyro:Destroy(); bodyGyro = nil end
+			if bodyPosition and bodyPosition.Parent then bodyPosition:Destroy(); bodyPosition = nil end
+			return
+		end
+		if not mainPart or not mainPart.Parent then
+			if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+			return
+		end
+		local rotationInput = 0
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then
+			rotationInput = ROTATION_SPEED * deltaTime
+		elseif UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then
+			rotationInput = -ROTATION_SPEED * deltaTime
+		end
+		targetYRotation = targetYRotation + rotationInput
+		local trickAngle = modeSettings[currentMode].angle
+		local targetCFrame = CFrame.new(mainPart.Position) * CFrame.Angles(0, targetYRotation, 0)
+		if currentMode == "Wheelie" then
+			targetCFrame = targetCFrame * CFrame.Angles(math.rad(trickAngle), 0, 0)
+		elseif currentMode == "Stoppie" then
+			targetCFrame = targetCFrame * CFrame.Angles(math.rad(-trickAngle), 0, 0)
+		elseif currentMode == "SideWheelie" then
+			local tiltAngle = modeSettings.SideWheelie.tilt
+			targetCFrame = targetCFrame * CFrame.Angles(math.rad(trickAngle), 0, math.rad(tiltAngle))
+		end
+		if bodyGyro and bodyGyro.Parent then
+			bodyGyro.CFrame = targetCFrame
+		else
+			if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+		end
+	end)
 end
 
--- Stop trick function
 local function stopTrick()
-    -- Handle BackHop mode
-    if currentMode == "BackHop" then
-        if backHopConnection then
-            backHopConnection:Disconnect()
-            backHopConnection = nil
-        end
-        
-        if bodyGyro and bodyGyro.Parent then
-            bodyGyro:Destroy()
-        end
-        bodyGyro = nil
-        return
-    end
-    
-    -- Handle Auto-Steer mode
-    if currentMode == "AutoSteer" then
-        autoSteerEnabled = false
-        
-        if autoSteerConnection then
-            autoSteerConnection:Disconnect()
-            autoSteerConnection = nil
-        end
-        
-        -- Clean up waypoint marker
-        if waypointMarker and waypointMarker.Parent then
-            waypointMarker:Destroy()
-        end
-        waypointMarker = nil
-        waypointPosition = nil
-        
-        -- Clean up Auto-Steer physics objects
-        motorcycle = findMotorcycle()
-        if motorcycle then
-            local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-            if mainPart then
-                local autoSteerGyro = mainPart:FindFirstChild("AutoSteerGyro")
-                if autoSteerGyro then
-                    autoSteerGyro:Destroy()
-                end
-                
-                -- Clean up gravity force
-                local gravityForce = mainPart:FindFirstChild("AutoSteerGravity")
-                if gravityForce then
-                    gravityForce:Destroy()
-                end
-            end
-        end
-        
-        return
-    end
-    
-    -- Handle Backflip and Frontflip - just destroy the angular velocity and return to neutral
-    if currentMode == "Backflip" or currentMode == "Frontflip" then
-        if bodyGyro and bodyGyro.Parent then
-            bodyGyro:Destroy()
-        end
-        bodyGyro = nil
-        return
-    end
-    
-    -- Disconnect the update loop immediately
-    if updateConnection then
-        updateConnection:Disconnect()
-        updateConnection = nil
-    end
-    
-    -- Smoothly return bike to ORIGINAL neutral position over 0.3 seconds, then disable control
-    if motorcycle and originalNeutralCFrame then
-        local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
-        if mainPart and bodyGyro and bodyGyro.Parent then
-            -- Get current orientation
-            local currentCFrame = mainPart.CFrame
-            
-            -- Use the ORIGINAL neutral CFrame we saved (just the rotation, keep current position)
-            local _, origY, _ = originalNeutralCFrame:ToOrientation()
-            local targetCFrame = CFrame.new(mainPart.Position) * CFrame.Angles(0, origY, 0)
-            
-            -- Smoothly tween to original neutral over 0.3 seconds
-            local startTime = tick()
-            local tweenConnection = nil
-            
-            tweenConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                local elapsed = tick() - startTime
-                local progress = math.min(elapsed / 0.3, 1) -- 0.3 second duration
-                
-                if progress >= 1 or not mainPart or not mainPart.Parent or not bodyGyro or not bodyGyro.Parent then
-                    -- Finished tweening - disable the BodyGyro's control so bike can rotate freely
-                    if tweenConnection then
-                        tweenConnection:Disconnect()
-                    end
-                    
-                    -- Disable BodyGyro control by setting MaxTorque to zero
-                    if bodyGyro and bodyGyro.Parent then
-                        if bodyGyro:IsA("BodyGyro") then
-                            bodyGyro.MaxTorque = Vector3.new(0, 0, 0)
-                        end
-                    end
-                    return
-                end
-                
-                -- Smoothly interpolate to original neutral position
-                local lerpedCFrame = currentCFrame:Lerp(targetCFrame, progress)
-                bodyGyro.CFrame = lerpedCFrame
-            end)
-        end
-    end
+	if currentMode == "BackHop" then
+		if backHopConnection then backHopConnection:Disconnect(); backHopConnection = nil end
+		if bodyGyro and bodyGyro.Parent then bodyGyro:Destroy() end
+		bodyGyro = nil
+		return
+	end
+	if currentMode == "AutoSteer" then
+		autoSteerEnabled = false
+		if autoSteerConnection then autoSteerConnection:Disconnect(); autoSteerConnection = nil end
+		if waypointMarker and waypointMarker.Parent then waypointMarker:Destroy() end
+		waypointMarker = nil
+		waypointPosition = nil
+		motorcycle = findMotorcycle()
+		if motorcycle then
+			local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+			if mainPart then
+				local g = mainPart:FindFirstChild("AutoSteerGyro")
+				if g then g:Destroy() end
+				local gf = mainPart:FindFirstChild("AutoSteerGravity")
+				if gf then gf:Destroy() end
+			end
+		end
+		return
+	end
+	if currentMode == "Backflip" or currentMode == "Frontflip" then
+		if bodyGyro and bodyGyro.Parent then bodyGyro:Destroy() end
+		bodyGyro = nil
+		return
+	end
+	if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+	if motorcycle and originalNeutralCFrame then
+		local mainPart = motorcycle:FindFirstChild("MainPart") or motorcycle.PrimaryPart
+		if mainPart and bodyGyro and bodyGyro.Parent then
+			local currentCFrame = mainPart.CFrame
+			local _, origY, _ = originalNeutralCFrame:ToOrientation()
+			local targetCFrame = CFrame.new(mainPart.Position) * CFrame.Angles(0, origY, 0)
+			local startTime = tick()
+			local tweenConn = nil
+			tweenConn = RunService.Heartbeat:Connect(function()
+				local elapsed = tick() - startTime
+				local progress = math.min(elapsed / 0.3, 1)
+				if progress >= 1 or not mainPart or not mainPart.Parent or not bodyGyro or not bodyGyro.Parent then
+					if tweenConn then tweenConn:Disconnect() end
+					if bodyGyro and bodyGyro.Parent and bodyGyro:IsA("BodyGyro") then
+						bodyGyro.MaxTorque = Vector3.new(0, 0, 0)
+					end
+					return
+				end
+				bodyGyro.CFrame = currentCFrame:Lerp(targetCFrame, progress)
+			end)
+		end
+	end
 end
 
--- Create GUI
-local function createGUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MotorcycleTricksGUI"
-    screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    -- Main Frame with modern design
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 340, 0, 540)
-    mainFrame.Position = UDim2.new(0.5, -170, 0.08, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
-    
-    -- Main frame shadow/border effect
-    local mainFrameBorder = Instance.new("UIStroke")
-    mainFrameBorder.Color = Color3.fromRGB(60, 60, 70)
-    mainFrameBorder.Thickness = 1
-    mainFrameBorder.Transparency = 0.5
-    mainFrameBorder.Parent = mainFrame
-    
-    -- Corner rounding
-    local mainCorner = Instance.new("UICorner")
-    mainCorner.CornerRadius = UDim.new(0, 16)
-    mainCorner.Parent = mainFrame
-    
-    -- Title Bar
-    local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 50)
-    titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = mainFrame
-    
-    local titleBarCorner = Instance.new("UICorner")
-    titleBarCorner.CornerRadius = UDim.new(0, 16)
-    titleBarCorner.Parent = titleBar
-    
-    -- Fix bottom corners of title bar
-    local titleBarFix = Instance.new("Frame")
-    titleBarFix.Size = UDim2.new(1, 0, 0, 16)
-    titleBarFix.Position = UDim2.new(0, 0, 1, -16)
-    titleBarFix.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    titleBarFix.BorderSizePixel = 0
-    titleBarFix.Parent = titleBar
-    
-    -- Title Text
-    local title = Instance.new("TextLabel")
-    title.Name = "Title"
-    title.Size = UDim2.new(1, -70, 0, 24)
-    title.Position = UDim2.new(0, 20, 0, 8)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamBold
-    title.Text = "VEHICLE TRICKS"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextSize = 18
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = titleBar
-    
-    -- Credits Text
-    local credits = Instance.new("TextLabel")
-    credits.Name = "Credits"
-    credits.Size = UDim2.new(1, -70, 0, 14)
-    credits.Position = UDim2.new(0, 20, 0, 30)
-    credits.BackgroundTransparency = 1
-    credits.Font = Enum.Font.Gotham
-    credits.Text = "Discord: spookyie"
-    credits.TextColor3 = Color3.fromRGB(120, 120, 140)
-    credits.TextSize = 11
-    credits.TextXAlignment = Enum.TextXAlignment.Left
-    credits.Parent = titleBar
-    
-    -- Refresh Button
-    local refreshBtn = Instance.new("TextButton")
-    refreshBtn.Name = "RefreshBtn"
-    refreshBtn.Size = UDim2.new(0, 40, 0, 30)
-    refreshBtn.Position = UDim2.new(1, -50, 0.5, -15)
-    refreshBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    refreshBtn.BorderSizePixel = 0
-    refreshBtn.AutoButtonColor = false
-    refreshBtn.Font = Enum.Font.GothamBold
-    refreshBtn.Text = "🔄"
-    refreshBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-    refreshBtn.TextSize = 18
-    refreshBtn.Parent = titleBar
-    
-    local refreshCorner = Instance.new("UICorner")
-    refreshCorner.CornerRadius = UDim.new(0, 6)
-    refreshCorner.Parent = refreshBtn
-    
-    local refreshStroke = Instance.new("UIStroke")
-    refreshStroke.Color = Color3.fromRGB(60, 60, 70)
-    refreshStroke.Thickness = 1
-    refreshStroke.Transparency = 0.5
-    refreshStroke.Parent = refreshBtn
-    
-    -- Refresh button hover effect
-    refreshBtn.MouseEnter:Connect(function()
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    end)
-    
-    refreshBtn.MouseLeave:Connect(function()
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-        refreshBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-    end)
-    
-    -- Refresh button click handler
-    refreshBtn.MouseButton1Click:Connect(function()
-        -- Visual feedback
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 220)
-        
-        -- Reset all state
-        isActive = false
-        motorcycle = nil
-        originalNeutralCFrame = nil
-        targetYRotation = 0
-        
-        -- Clean up physics objects
-        if bodyGyro and bodyGyro.Parent then
-            bodyGyro:Destroy()
-        end
-        bodyGyro = nil
-        
-        if bodyPosition and bodyPosition.Parent then
-            bodyPosition:Destroy()
-        end
-        bodyPosition = nil
-        
-        if updateConnection then
-            updateConnection:Disconnect()
-            updateConnection = nil
-        end
-        
-        -- Clean up auto-steer
-        autoSteerEnabled = false
-        if autoSteerConnection then
-            autoSteerConnection:Disconnect()
-            autoSteerConnection = nil
-        end
-        if waypointMarker and waypointMarker.Parent then
-            waypointMarker:Destroy()
-        end
-        waypointMarker = nil
-        waypointPosition = nil
-        
-        -- Fade out effect
-        TweenService:Create(mainFrame, TweenInfo.new(0.15), {BackgroundTransparency = 0.5}):Play()
-        for _, child in ipairs(mainFrame:GetDescendants()) do
-            if child:IsA("TextLabel") or child:IsA("TextButton") then
-                TweenService:Create(child, TweenInfo.new(0.15), {TextTransparency = 0.5}):Play()
-            elseif child:IsA("Frame") and child.BackgroundTransparency < 1 then
-                TweenService:Create(child, TweenInfo.new(0.15), {BackgroundTransparency = 0.5}):Play()
-            end
-        end
-        
-        task.wait(0.15)
-        
-        -- Fade back in
-        TweenService:Create(mainFrame, TweenInfo.new(0.15), {BackgroundTransparency = 0}):Play()
-        for _, child in ipairs(mainFrame:GetDescendants()) do
-            if child:IsA("TextLabel") or child:IsA("TextButton") then
-                TweenService:Create(child, TweenInfo.new(0.15), {TextTransparency = 0}):Play()
-            elseif child:IsA("Frame") and child.Name ~= "SliderFill" then
-                if child.BackgroundTransparency < 1 then
-                    TweenService:Create(child, TweenInfo.new(0.15), {BackgroundTransparency = 0}):Play()
-                end
-            end
-        end
-        
-        task.wait(0.15)
-        refreshBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    end)
-    
-    -- Accent line under title
-    local accentLine = Instance.new("Frame")
-    accentLine.Size = UDim2.new(1, 0, 0, 2)
-    accentLine.Position = UDim2.new(0, 0, 1, 0)
-    accentLine.BackgroundColor3 = Color3.fromRGB(100, 100, 220)
-    accentLine.BorderSizePixel = 0
-    accentLine.Parent = titleBar
-    
-    local accentGradient = Instance.new("UIGradient")
-    accentGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 100, 220)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 100, 220)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 100, 220))
-    }
-    accentGradient.Parent = accentLine
-    
-    -- Content Container
-    local contentFrame = Instance.new("Frame")
-    contentFrame.Name = "ContentFrame"
-    contentFrame.Size = UDim2.new(1, -30, 1, -70)
-    contentFrame.Position = UDim2.new(0, 15, 0, 60)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.Parent = mainFrame
-    
-    -- Trick Mode Section
-    local modeSection = Instance.new("Frame")
-    modeSection.Name = "ModeSection"
-    modeSection.Size = UDim2.new(1, 0, 0, 215)
-    modeSection.Position = UDim2.new(0, 0, 0, 0)  -- Changed from 55 to 0 since no vehicle section
-    modeSection.BackgroundTransparency = 1
-    modeSection.Parent = contentFrame
-    
-    local modeLabel = Instance.new("TextLabel")
-    modeLabel.Size = UDim2.new(1, 0, 0, 16)
-    modeLabel.BackgroundTransparency = 1
-    modeLabel.Font = Enum.Font.GothamMedium
-    modeLabel.Text = "TRICK MODE"
-    modeLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
-    modeLabel.TextSize = 11
-    modeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    modeLabel.Parent = modeSection
-    
-    -- Mode Buttons Grid
-    local modeButtonsFrame = Instance.new("Frame")
-    modeButtonsFrame.Size = UDim2.new(1, 0, 0, 198)
-    modeButtonsFrame.Position = UDim2.new(0, 0, 0, 19)
-    modeButtonsFrame.BackgroundTransparency = 1
-    modeButtonsFrame.Parent = modeSection
-    
-    -- Create mode buttons
-    local function createModeButton(name, text, icon, position, color)
-        local btn = Instance.new("TextButton")
-        btn.Name = name
-        btn.Size = UDim2.new(0.48, 0, 0, 34)
-        btn.Position = position
-        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-        btn.BorderSizePixel = 0
-        btn.AutoButtonColor = false
-        btn.Font = Enum.Font.GothamBold
-        btn.Text = icon .. " " .. text
-        btn.TextColor3 = Color3.fromRGB(140, 140, 150)
-        btn.TextSize = 11
-        btn.Parent = modeButtonsFrame
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 6)
-        corner.Parent = btn
-        
-        btn:SetAttribute("ActiveColor", color.R * 255 .. "," .. color.G * 255 .. "," .. color.B * 255)
-        
-        return btn
-    end
-    
-    -- Row 1 - Wheelie and Stoppie
-    local wheelieBtn = createModeButton("WheelieBtn", "WHEELIE", "⬆️", UDim2.new(0, 0, 0, 0), Color3.fromRGB(60, 180, 100))
-    local stoppieBtn = createModeButton("StoppieBtn", "STOPPIE", "⬇️", UDim2.new(0.52, 0, 0, 0), Color3.fromRGB(220, 100, 60))
-    
-    -- Row 2 - SideWheelie and BackHop
-    local sideWheelieBtn = createModeButton("SideWheelieBtn", "SIDE WHEELIE", "↗️", UDim2.new(0, 0, 0, 40), Color3.fromRGB(200, 150, 50))
-    local backHopBtn = createModeButton("BackHopBtn", "BACK HOP", "🦘", UDim2.new(0.52, 0, 0, 40), Color3.fromRGB(255, 120, 180))
-    
-    -- Row 3 - Jump and Backflip
-    local jumpBtn = createModeButton("JumpBtn", "JUMP", "🚀", UDim2.new(0, 0, 0, 80), Color3.fromRGB(100, 140, 220))
-    local backflipBtn = createModeButton("BackflipBtn", "BACKFLIP", "🔄", UDim2.new(0.52, 0, 0, 80), Color3.fromRGB(150, 100, 200))
-    
-    -- Row 4 - Frontflip and Auto-Steer
-    local frontflipBtn = createModeButton("FrontflipBtn", "FRONTFLIP", "🔃", UDim2.new(0, 0, 0, 120), Color3.fromRGB(100, 200, 150))
-    local autoSteerBtn = createModeButton("AutoSteerBtn", "AUTO-STEER", "🎯", UDim2.new(0.52, 0, 0, 120), Color3.fromRGB(80, 200, 200))
-    
-    -- Settings Section
-    local settingsSection = Instance.new("Frame")
-    settingsSection.Name = "SettingsSection"
-    settingsSection.Size = UDim2.new(1, 0, 0, 65)
-    settingsSection.Position = UDim2.new(0, 0, 0, 220)
-    settingsSection.BackgroundTransparency = 1
-    settingsSection.Parent = contentFrame
-    
-    local settingsLabel = Instance.new("TextLabel")
-    settingsLabel.Name = "SettingsLabel"
-    settingsLabel.Size = UDim2.new(1, 0, 0, 16)
-    settingsLabel.BackgroundTransparency = 1
-    settingsLabel.Font = Enum.Font.GothamMedium
-    settingsLabel.Text = "Wheelie Angle: 45°"
-    settingsLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
-    settingsLabel.TextSize = 11
-    settingsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    settingsLabel.Parent = settingsSection
-    
-    -- Slider Container
-    local sliderContainer = Instance.new("Frame")
-    sliderContainer.Size = UDim2.new(1, 0, 0, 30)
-    sliderContainer.Position = UDim2.new(0, 0, 0, 22)
-    sliderContainer.BackgroundTransparency = 1
-    sliderContainer.Parent = settingsSection
-    
-    -- Slider Background
-    local sliderBg = Instance.new("Frame")
-    sliderBg.Name = "SliderBg"
-    sliderBg.Size = UDim2.new(0.7, 0, 0, 6)  -- Changed from 1 to 0.7 (70% width)
-    sliderBg.Position = UDim2.new(0.15, 0, 0.5, -3)  -- Centered (15% margin on left)
-    sliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    sliderBg.BorderSizePixel = 0
-    sliderBg.Parent = sliderContainer
-    
-    local sliderBgCorner = Instance.new("UICorner")
-    sliderBgCorner.CornerRadius = UDim.new(1, 0)
-    sliderBgCorner.Parent = sliderBg
-    
-    -- Slider Fill
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Name = "SliderFill"
-    sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
-    sliderFill.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
-    sliderFill.BorderSizePixel = 0
-    sliderFill.Parent = sliderBg
-    
-    local sliderFillCorner = Instance.new("UICorner")
-    sliderFillCorner.CornerRadius = UDim.new(1, 0)
-    sliderFillCorner.Parent = sliderFill
-    
-    -- Slider Button
-    local sliderBtn = Instance.new("Frame")
-    sliderBtn.Name = "SliderBtn"
-    sliderBtn.Size = UDim2.new(0, 16, 0, 16)
-    sliderBtn.Position = UDim2.new(0.5, -8, 0.5, -8)
-    sliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    sliderBtn.BorderSizePixel = 0
-    sliderBtn.Active = true  -- Prevent GUI dragging when interacting with slider
-    sliderBtn.Parent = sliderContainer
-    
-    local sliderBtnStroke = Instance.new("UIStroke")
-    sliderBtnStroke.Color = Color3.fromRGB(60, 180, 100)
-    sliderBtnStroke.Thickness = 2
-    sliderBtnStroke.Parent = sliderBtn
-    
-    local sliderBtnCorner = Instance.new("UICorner")
-    sliderBtnCorner.CornerRadius = UDim.new(1, 0)
-    sliderBtnCorner.Parent = sliderBtn
-    
-    -- Make slider background also Active to capture clicks
-    sliderBg.Active = true
-    
-    -- Extra Settings Section (Mouse Wheel & Keybind)
-    local extraSettingsSection = Instance.new("Frame")
-    extraSettingsSection.Name = "ExtraSettingsSection"
-    extraSettingsSection.Size = UDim2.new(1, 0, 0, 100)
-    extraSettingsSection.Position = UDim2.new(0, 0, 0, 290)
-    extraSettingsSection.BackgroundTransparency = 1
-    extraSettingsSection.Parent = contentFrame
-    
-    -- Mouse Wheel Toggle Button
-    local mouseWheelBtn = Instance.new("TextButton")
-    mouseWheelBtn.Name = "MouseWheelBtn"
-    mouseWheelBtn.Size = UDim2.new(1, 0, 0, 28)
-    mouseWheelBtn.Position = UDim2.new(0, 0, 0, 0)
-    mouseWheelBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    mouseWheelBtn.BorderSizePixel = 0
-    mouseWheelBtn.AutoButtonColor = false
-    mouseWheelBtn.Font = Enum.Font.GothamMedium
-    mouseWheelBtn.Text = "🖱️ Mouse Wheel Angle: OFF"
-    mouseWheelBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-    mouseWheelBtn.TextSize = 11
-    mouseWheelBtn.Parent = extraSettingsSection
-    
-    local mouseWheelCorner = Instance.new("UICorner")
-    mouseWheelCorner.CornerRadius = UDim.new(0, 6)
-    mouseWheelCorner.Parent = mouseWheelBtn
-    
-    -- Keybind Toggle Button
-    local keybindBtn = Instance.new("TextButton")
-    keybindBtn.Name = "KeybindBtn"
-    keybindBtn.Size = UDim2.new(1, 0, 0, 28)
-    keybindBtn.Position = UDim2.new(0, 0, 0, 34)
-    keybindBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    keybindBtn.BorderSizePixel = 0
-    keybindBtn.AutoButtonColor = false
-    keybindBtn.Font = Enum.Font.GothamMedium
-    keybindBtn.Text = "⌨️ Activation Key: LEFT CTRL"
-    keybindBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-    keybindBtn.TextSize = 11
-    keybindBtn.Parent = extraSettingsSection
-    
-    local keybindCorner = Instance.new("UICorner")
-    keybindCorner.CornerRadius = UDim.new(0, 6)
-    keybindCorner.Parent = keybindBtn
-    
-    -- Auto Switch Toggle Button (Alt to switch Wheelie/Stoppie)
-    local autoSwitchBtn = Instance.new("TextButton")
-    autoSwitchBtn.Name = "AutoSwitchBtn"
-    autoSwitchBtn.Size = UDim2.new(1, 0, 0, 28)
-    autoSwitchBtn.Position = UDim2.new(0, 0, 0, 68)
-    autoSwitchBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    autoSwitchBtn.BorderSizePixel = 0
-    autoSwitchBtn.AutoButtonColor = false
-    autoSwitchBtn.Font = Enum.Font.GothamMedium
-    autoSwitchBtn.Text = "🔄 Alt Switch (Wheelie/Stoppie): OFF"
-    autoSwitchBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-    autoSwitchBtn.TextSize = 11
-    autoSwitchBtn.Parent = extraSettingsSection
-    
-    local autoSwitchCorner = Instance.new("UICorner")
-    autoSwitchCorner.CornerRadius = UDim.new(0, 6)
-    autoSwitchCorner.Parent = autoSwitchBtn
-    
-    -- Mouse Wheel Toggle Handler
-    mouseWheelBtn.MouseButton1Click:Connect(function()
-        mouseWheelControlEnabled = not mouseWheelControlEnabled
-        if mouseWheelControlEnabled then
-            mouseWheelBtn.Text = "🖱️ Mouse Wheel Angle: ON"
-            mouseWheelBtn.BackgroundColor3 = Color3.fromRGB(60, 150, 100)
-            mouseWheelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        else
-            mouseWheelBtn.Text = "🖱️ Mouse Wheel Angle: OFF"
-            mouseWheelBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-            mouseWheelBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-        end
-    end)
-    
-    -- Keybind Toggle Handler
-    keybindBtn.MouseButton1Click:Connect(function()
-        if activationKey == Enum.KeyCode.LeftControl then
-            activationKey = Enum.KeyCode.LeftShift
-            keybindBtn.Text = "⌨️ Activation Key: LEFT SHIFT"
-            statusLabel.Text = "Press LEFT SHIFT to activate"
-        else
-            activationKey = Enum.KeyCode.LeftControl
-            keybindBtn.Text = "⌨️ Activation Key: LEFT CTRL"
-            statusLabel.Text = "Press LEFT CTRL to activate"
-        end
-    end)
-    
-    -- Auto Switch Toggle Handler
-    autoSwitchBtn.MouseButton1Click:Connect(function()
-        autoSwitchEnabled = not autoSwitchEnabled
-        if autoSwitchEnabled then
-            autoSwitchBtn.Text = "🔄 Alt Switch (Wheelie/Stoppie): ON"
-            autoSwitchBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 180)
-            autoSwitchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        else
-            autoSwitchBtn.Text = "🔄 Alt Switch (Wheelie/Stoppie): OFF"
-            autoSwitchBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-            autoSwitchBtn.TextColor3 = Color3.fromRGB(140, 140, 150)
-        end
-    end)
-    
-    -- Status Footer
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(1, 0, 0, 20)
-    statusLabel.Position = UDim2.new(0, 0, 1, -25)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Font = Enum.Font.GothamMedium
-    statusLabel.Text = "Press LEFT CTRL to activate"
-    statusLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
-    statusLabel.TextSize = 11
-    statusLabel.Parent = contentFrame
-    
-    -- Update slider function
-    local function updateSlider(value)
-        local mode = modeSettings[currentMode]
-        
-        if currentMode == "Wheelie" or currentMode == "Stoppie" then
-            local normalizedValue = (value - mode.minAngle) / (mode.maxAngle - mode.minAngle)
-            normalizedValue = math.clamp(normalizedValue, 0, 1)
-            
-            sliderFill.Size = UDim2.new(normalizedValue, 0, 1, 0)
-            sliderBtn.Position = UDim2.new(normalizedValue, -8, 0.5, -8)
-            settingsLabel.Text = currentMode .. " Angle: " .. math.floor(value) .. "°"
-            
-            mode.angle = value
-            settingsSection.Visible = true
-        elseif currentMode == "SideWheelie" then
-            local normalizedValue = (value - mode.minTilt) / (mode.maxTilt - mode.minTilt)
-            normalizedValue = math.clamp(normalizedValue, 0, 1)
-            
-            sliderFill.Size = UDim2.new(normalizedValue, 0, 1, 0)
-            sliderBtn.Position = UDim2.new(normalizedValue, -8, 0.5, -8)
-            settingsLabel.Text = "Side Tilt: " .. math.floor(value) .. "°"
-            
-            mode.tilt = value
-            settingsSection.Visible = true
-        elseif currentMode == "BackHop" then
-            local normalizedValue = (value - mode.minHopPower) / (mode.maxHopPower - mode.minHopPower)
-            normalizedValue = math.clamp(normalizedValue, 0, 1)
-            
-            sliderFill.Size = UDim2.new(normalizedValue, 0, 1, 0)
-            sliderBtn.Position = UDim2.new(normalizedValue, -8, 0.5, -8)
-            settingsLabel.Text = "Hop Power: " .. math.floor(value)
-            
-            mode.hopPower = value
-            settingsSection.Visible = true
-        elseif currentMode == "Jump" then
-            local normalizedValue = (value - mode.minPower) / (mode.maxPower - mode.minPower)
-            normalizedValue = math.clamp(normalizedValue, 0, 1)
-            
-            sliderFill.Size = UDim2.new(normalizedValue, 0, 1, 0)
-            sliderBtn.Position = UDim2.new(normalizedValue, -8, 0.5, -8)
-            settingsLabel.Text = "Jump Power: " .. math.floor(value)
-            
-            mode.power = value
-            settingsSection.Visible = true
-        elseif currentMode == "Suspension" then
-            local normalizedValue = (value - mode.minHeight) / (mode.maxHeight - mode.minHeight)
-            normalizedValue = math.clamp(normalizedValue, 0, 1)
-            
-            sliderFill.Size = UDim2.new(normalizedValue, 0, 1, 0)
-            sliderBtn.Position = UDim2.new(normalizedValue, -8, 0.5, -8)
-            settingsLabel.Text = "Suspension Height: " .. math.floor(value * 10) / 10
-            
-            mode.height = value
-            settingsSection.Visible = true
-        elseif currentMode == "Backflip" or currentMode == "Frontflip" then
-            local normalizedValue = (value - mode.minSpeed) / (mode.maxSpeed - mode.minSpeed)
-            normalizedValue = math.clamp(normalizedValue, 0, 1)
-            
-            sliderFill.Size = UDim2.new(normalizedValue, 0, 1, 0)
-            sliderBtn.Position = UDim2.new(normalizedValue, -8, 0.5, -8)
-            settingsLabel.Text = currentMode .. " Speed: " .. math.floor(value * 10) / 10
-            
-            mode.speed = value
-            settingsSection.Visible = true
-        elseif currentMode == "AutoSteer" then
-            -- Hide slider for AutoSteer - it's not needed
-            settingsSection.Visible = false
-        end
-    end
-    
-    -- Slider dragging
-    local dragging = false
-    
-    -- Click on slider background to jump to position
-    sliderBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            mainFrame.Draggable = false  -- Disable GUI dragging when using slider
-            
-            -- Immediately jump to clicked position
-            local mousePos = UserInputService:GetMouseLocation()
-            local sliderPos = sliderBg.AbsolutePosition
-            local sliderSize = sliderBg.AbsoluteSize
-            
-            local relativeX = mousePos.X - sliderPos.X
-            local normalizedX = math.clamp(relativeX / sliderSize.X, 0, 1)
-            
-            local mode = modeSettings[currentMode]
-            
-            if currentMode == "Wheelie" or currentMode == "Stoppie" then
-                local newAngle = mode.minAngle + (normalizedX * (mode.maxAngle - mode.minAngle))
-                updateSlider(newAngle)
-            elseif currentMode == "SideWheelie" then
-                local newTilt = mode.minTilt + (normalizedX * (mode.maxTilt - mode.minTilt))
-                updateSlider(newTilt)
-            elseif currentMode == "BackHop" then
-                local newPower = mode.minHopPower + (normalizedX * (mode.maxHopPower - mode.minHopPower))
-                updateSlider(newPower)
-            elseif currentMode == "Jump" then
-                local newPower = mode.minPower + (normalizedX * (mode.maxPower - mode.minPower))
-                updateSlider(newPower)
-            elseif currentMode == "Backflip" or currentMode == "Frontflip" then
-                local newSpeed = mode.minSpeed + (normalizedX * (mode.maxSpeed - mode.minSpeed))
-                updateSlider(newSpeed)
-            end
-        end
-    end)
-    
-    -- Drag slider button
-    sliderBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            mainFrame.Draggable = false  -- Disable GUI dragging when using slider
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-            mainFrame.Draggable = true  -- Re-enable GUI dragging after slider use
-        end
-    end)
-    
-    game:GetService("RunService").RenderStepped:Connect(function()
-        if dragging then
-            local mousePos = UserInputService:GetMouseLocation()
-            local sliderPos = sliderBg.AbsolutePosition
-            local sliderSize = sliderBg.AbsoluteSize
-            
-            local relativeX = mousePos.X - sliderPos.X
-            local normalizedX = math.clamp(relativeX / sliderSize.X, 0, 1)
-            
-            local mode = modeSettings[currentMode]
-            
-            if currentMode == "Wheelie" or currentMode == "Stoppie" then
-                local newAngle = mode.minAngle + (normalizedX * (mode.maxAngle - mode.minAngle))
-                updateSlider(newAngle)
-            elseif currentMode == "SideWheelie" then
-                local newTilt = mode.minTilt + (normalizedX * (mode.maxTilt - mode.minTilt))
-                updateSlider(newTilt)
-            elseif currentMode == "BackHop" then
-                local newPower = mode.minHopPower + (normalizedX * (mode.maxHopPower - mode.minHopPower))
-                updateSlider(newPower)
-            elseif currentMode == "Jump" then
-                local newPower = mode.minPower + (normalizedX * (mode.maxPower - mode.minPower))
-                updateSlider(newPower)
-            elseif currentMode == "Backflip" or currentMode == "Frontflip" then
-                local newSpeed = mode.minSpeed + (normalizedX * (mode.maxSpeed - mode.minSpeed))
-                updateSlider(newSpeed)
-            end
-        end
-    end)
-    
-    -- Mode switching
-    local function switchMode(mode)
-        currentMode = mode
-        
-        for _, btn in ipairs({wheelieBtn, stoppieBtn, sideWheelieBtn, backHopBtn, jumpBtn, autoSteerBtn, backflipBtn, frontflipBtn}) do
-            btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-            btn.TextColor3 = Color3.fromRGB(140, 140, 150)
-        end
-        
-        local activeBtn = nil
-        local activeColor = nil
-        
-        if mode == "Wheelie" then
-            activeBtn = wheelieBtn
-            activeColor = Color3.fromRGB(60, 180, 100)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.Wheelie.angle)
-        elseif mode == "Stoppie" then
-            activeBtn = stoppieBtn
-            activeColor = Color3.fromRGB(220, 100, 60)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.Stoppie.angle)
-        elseif mode == "SideWheelie" then
-            activeBtn = sideWheelieBtn
-            activeColor = Color3.fromRGB(200, 150, 50)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.SideWheelie.tilt)
-        elseif mode == "BackHop" then
-            activeBtn = backHopBtn
-            activeColor = Color3.fromRGB(255, 120, 180)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.BackHop.hopPower)
-        elseif mode == "Jump" then
-            activeBtn = jumpBtn
-            activeColor = Color3.fromRGB(100, 140, 220)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.Jump.power)
-        elseif mode == "AutoSteer" then
-            activeBtn = autoSteerBtn
-            activeColor = Color3.fromRGB(80, 200, 200)
-            settingsSection.Visible = false -- Hide slider for AutoSteer
-        elseif mode == "Backflip" then
-            activeBtn = backflipBtn
-            activeColor = Color3.fromRGB(150, 100, 200)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.Backflip.speed)
-        elseif mode == "Frontflip" then
-            activeBtn = frontflipBtn
-            activeColor = Color3.fromRGB(100, 200, 150)
-            sliderFill.BackgroundColor3 = activeColor
-            sliderBtnStroke.Color = activeColor
-            updateSlider(modeSettings.Frontflip.speed)
-        end
-        
-        if activeBtn then
-            activeBtn.BackgroundColor3 = activeColor
-            activeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        end
-    end
-    
-    wheelieBtn.MouseButton1Click:Connect(function() switchMode("Wheelie") end)
-    stoppieBtn.MouseButton1Click:Connect(function() switchMode("Stoppie") end)
-    sideWheelieBtn.MouseButton1Click:Connect(function() switchMode("SideWheelie") end)
-    backHopBtn.MouseButton1Click:Connect(function() switchMode("BackHop") end)
-    jumpBtn.MouseButton1Click:Connect(function() switchMode("Jump") end)
-    autoSteerBtn.MouseButton1Click:Connect(function() switchMode("AutoSteer") end)
-    backflipBtn.MouseButton1Click:Connect(function() switchMode("Backflip") end)
-    frontflipBtn.MouseButton1Click:Connect(function() switchMode("Frontflip") end)
-    
-    -- Initialize
-    switchMode("Wheelie")
-    
-    -- Status update
-    local function updateStatus(active)
-        if active then
-            statusLabel.Text = currentMode:upper() .. " ACTIVE!"
-            if currentMode == "Wheelie" then
-                statusLabel.TextColor3 = Color3.fromRGB(60, 180, 100)
-            elseif currentMode == "Stoppie" then
-                statusLabel.TextColor3 = Color3.fromRGB(220, 100, 60)
-            elseif currentMode == "SideWheelie" then
-                statusLabel.TextColor3 = Color3.fromRGB(200, 150, 50)
-            elseif currentMode == "BackHop" then
-                statusLabel.TextColor3 = Color3.fromRGB(255, 120, 180)
-            elseif currentMode == "Jump" then
-                statusLabel.TextColor3 = Color3.fromRGB(100, 140, 220)
-            elseif currentMode == "AutoSteer" then
-                statusLabel.TextColor3 = Color3.fromRGB(80, 200, 200)
-            elseif currentMode == "Backflip" then
-                statusLabel.TextColor3 = Color3.fromRGB(150, 100, 200)
-            elseif currentMode == "Frontflip" then
-                statusLabel.TextColor3 = Color3.fromRGB(100, 200, 150)
-            end
-        else
-            if currentMode == "AutoSteer" then
-                statusLabel.Text = "Click M1 to set waypoint"
-                statusLabel.TextColor3 = Color3.fromRGB(80, 200, 200)
-            else
-                statusLabel.Text = "Press LEFT CTRL to activate"
-                statusLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
-            end
-        end
-    end
-    
-    screenGui.Parent = player:WaitForChild("PlayerGui")
-    
-    return updateStatus
-end
-
--- Create the GUI
-local updateStatus = createGUI()
-
--- Function to reset all state variables
 local function resetState()
-    isActive = false
-    motorcycle = nil
-    bodyGyro = nil
-    bodyPosition = nil
-    originalNeutralCFrame = nil
-    targetYRotation = 0
-    
-    if updateConnection then
-        updateConnection:Disconnect()
-        updateConnection = nil
-    end
+	isActive = false
+	motorcycle = nil
+	bodyGyro = nil
+	bodyPosition = nil
+	originalNeutralCFrame = nil
+	targetYRotation = 0
+	if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
 end
+
+------------------------------------------------------
+--             REVAMPED GUI                         --
+------------------------------------------------------
+
+-- Theme
+local T = {
+	Bg         = Color3.fromRGB(12, 12, 16),
+	Surface    = Color3.fromRGB(20, 20, 26),
+	Card       = Color3.fromRGB(26, 26, 34),
+	CardHover  = Color3.fromRGB(34, 34, 44),
+	Border     = Color3.fromRGB(38, 38, 50),
+	Accent     = Color3.fromRGB(99, 102, 241),   -- Indigo
+	AccentGlow = Color3.fromRGB(129, 132, 255),
+	Text       = Color3.fromRGB(235, 235, 245),
+	TextDim    = Color3.fromRGB(115, 115, 135),
+	TextMuted  = Color3.fromRGB(75, 75, 95),
+	Green      = Color3.fromRGB(52, 211, 153),
+	Red        = Color3.fromRGB(248, 113, 113),
+	Orange     = Color3.fromRGB(251, 191, 36),
+	Pink       = Color3.fromRGB(244, 114, 182),
+	Blue       = Color3.fromRGB(96, 165, 250),
+	Cyan       = Color3.fromRGB(34, 211, 238),
+	Purple     = Color3.fromRGB(167, 139, 250),
+	Teal       = Color3.fromRGB(45, 212, 191),
+}
+
+-- Mode color map
+local ModeColors = {
+	Wheelie     = T.Green,
+	Stoppie     = T.Orange,
+	SideWheelie = T.Pink,
+	BackHop     = T.Red,
+	Jump        = T.Blue,
+	Backflip    = T.Purple,
+	Frontflip   = T.Teal,
+	AutoSteer   = T.Cyan,
+}
+
+local ModeIcons = {
+	Wheelie     = "W",
+	Stoppie     = "S",
+	SideWheelie = "SW",
+	BackHop     = "BH",
+	Jump        = "J",
+	Backflip    = "BF",
+	Frontflip   = "FF",
+	AutoSteer   = "AS",
+}
+
+-- Utilities
+local function tw(obj, props, dur, style, dir)
+	return TweenService:Create(obj, TweenInfo.new(dur or 0.2, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
+end
+
+local function corner(p, r)
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r or 8); c.Parent = p; return c
+end
+
+local function stroke(p, col, th)
+	local s = Instance.new("UIStroke"); s.Color = col or T.Border; s.Thickness = th or 1; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = p; return s
+end
+
+local function pad(p, t, b, l, r)
+	local u = Instance.new("UIPadding")
+	u.PaddingTop = UDim.new(0, t or 0); u.PaddingBottom = UDim.new(0, b or 0)
+	u.PaddingLeft = UDim.new(0, l or 0); u.PaddingRight = UDim.new(0, r or 0)
+	u.Parent = p; return u
+end
+
+-- Refs for external access
+local statusLabelRef, updateSliderRef, switchModeRef
+
+local function createGUI()
+	-- ScreenGui
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "MotorcycleTricksGUI"
+	sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	sg.DisplayOrder = 10
+
+	-- Main container
+	local main = Instance.new("Frame")
+	main.Name = "Main"
+	main.Size = UDim2.new(0, 300, 0, 0) -- starts collapsed for animation
+	main.Position = UDim2.new(0.5, -150, 0.5, 0)
+	main.AnchorPoint = Vector2.new(0.5, 0.5)
+	main.BackgroundColor3 = T.Bg
+	main.BorderSizePixel = 0
+	main.ClipsDescendants = true
+	main.Parent = sg
+	corner(main, 14)
+	stroke(main, T.Border, 1)
+
+	-- Outer glow/shadow
+	local shadow = Instance.new("ImageLabel")
+	shadow.Size = UDim2.new(1, 40, 1, 40)
+	shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+	shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+	shadow.BackgroundTransparency = 1
+	shadow.Image = "rbxassetid://5554236805"
+	shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+	shadow.ImageTransparency = 0.4
+	shadow.ScaleType = Enum.ScaleType.Slice
+	shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+	shadow.ZIndex = -1
+	shadow.Parent = main
+
+	----------------------------------------------
+	-- HEADER
+	----------------------------------------------
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 52)
+	header.BackgroundColor3 = T.Surface
+	header.BorderSizePixel = 0
+	header.Parent = main
+	corner(header, 14)
+	-- Cover bottom corners
+	local hCover = Instance.new("Frame")
+	hCover.Size = UDim2.new(1, 0, 0, 16); hCover.Position = UDim2.new(0, 0, 1, -16)
+	hCover.BackgroundColor3 = T.Surface; hCover.BorderSizePixel = 0; hCover.Parent = header
+
+	-- Accent bar
+	local accentBar = Instance.new("Frame")
+	accentBar.Size = UDim2.new(1, 0, 0, 2)
+	accentBar.Position = UDim2.new(0, 0, 1, 0)
+	accentBar.BackgroundColor3 = T.Accent
+	accentBar.BorderSizePixel = 0
+	accentBar.Parent = header
+	local accentGrad = Instance.new("UIGradient")
+	accentGrad.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, T.Accent),
+		ColorSequenceKeypoint.new(0.5, T.AccentGlow),
+		ColorSequenceKeypoint.new(1, T.Accent),
+	}
+	accentGrad.Transparency = NumberSequence.new{
+		NumberSequenceKeypoint.new(0, 0.4),
+		NumberSequenceKeypoint.new(0.5, 0),
+		NumberSequenceKeypoint.new(1, 0.4),
+	}
+	accentGrad.Parent = accentBar
+
+	-- Title
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(1, -100, 0, 20)
+	titleLabel.Position = UDim2.new(0, 16, 0, 9)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = "VEHICLE TRICKS"
+	titleLabel.TextColor3 = T.Text
+	titleLabel.TextSize = 15
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.Parent = header
+
+	-- Subtitle
+	local subLabel = Instance.new("TextLabel")
+	subLabel.Size = UDim2.new(1, -100, 0, 14)
+	subLabel.Position = UDim2.new(0, 16, 0, 30)
+	subLabel.BackgroundTransparency = 1
+	subLabel.Text = "by spookyie"
+	subLabel.TextColor3 = T.TextMuted
+	subLabel.TextSize = 10
+	subLabel.Font = Enum.Font.Gotham
+	subLabel.TextXAlignment = Enum.TextXAlignment.Left
+	subLabel.Parent = header
+
+	-- Header buttons container
+	local hBtns = Instance.new("Frame")
+	hBtns.Size = UDim2.new(0, 76, 0, 28)
+	hBtns.Position = UDim2.new(1, -88, 0.5, -14)
+	hBtns.BackgroundTransparency = 1
+	hBtns.Parent = header
+
+	local function headerBtn(name, text, col, posX)
+		local b = Instance.new("TextButton")
+		b.Name = name; b.Size = UDim2.new(0, 32, 0, 28)
+		b.Position = UDim2.new(0, posX, 0, 0)
+		b.BackgroundColor3 = col; b.BackgroundTransparency = 0.88
+		b.Text = text; b.TextColor3 = col; b.TextSize = 13
+		b.Font = Enum.Font.GothamBold; b.BorderSizePixel = 0
+		b.AutoButtonColor = false; b.Parent = hBtns
+		corner(b, 6)
+		b.MouseEnter:Connect(function() tw(b, {BackgroundTransparency = 0.7}, 0.15):Play() end)
+		b.MouseLeave:Connect(function() tw(b, {BackgroundTransparency = 0.88}, 0.15):Play() end)
+		return b
+	end
+
+	local refreshBtn = headerBtn("Refresh", "R", T.Accent, 0)
+	local minBtn = headerBtn("Min", "—", T.TextDim, 38)
+
+	----------------------------------------------
+	-- SCROLLING CONTENT
+	----------------------------------------------
+	local content = Instance.new("ScrollingFrame")
+	content.Name = "Content"
+	content.Size = UDim2.new(1, 0, 1, -52)
+	content.Position = UDim2.new(0, 0, 0, 52)
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.ScrollBarThickness = 2
+	content.ScrollBarImageColor3 = T.Accent
+	content.ScrollBarImageTransparency = 0.5
+	content.CanvasSize = UDim2.new(0, 0, 0, 0)
+	content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	content.Parent = main
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 6)
+	layout.Parent = content
+	pad(content, 10, 10, 12, 12)
+
+	----------------------------------------------
+	-- SECTION: Trick Modes
+	----------------------------------------------
+	local modeLabel = Instance.new("TextLabel")
+	modeLabel.Size = UDim2.new(1, 0, 0, 16)
+	modeLabel.BackgroundTransparency = 1
+	modeLabel.Text = "TRICKS"
+	modeLabel.TextColor3 = T.TextMuted
+	modeLabel.TextSize = 10
+	modeLabel.Font = Enum.Font.GothamBold
+	modeLabel.TextXAlignment = Enum.TextXAlignment.Left
+	modeLabel.LayoutOrder = 1
+	modeLabel.Parent = content
+
+	-- Grid container for mode buttons
+	local modeGrid = Instance.new("Frame")
+	modeGrid.Name = "ModeGrid"
+	modeGrid.Size = UDim2.new(1, 0, 0, 152)
+	modeGrid.BackgroundTransparency = 1
+	modeGrid.LayoutOrder = 2
+	modeGrid.Parent = content
+
+	local modeButtons = {}
+	local modeOrder = {"Wheelie", "Stoppie", "SideWheelie", "BackHop", "Jump", "Backflip", "Frontflip", "AutoSteer"}
+	local modeDisplayNames = {
+		Wheelie = "Wheelie", Stoppie = "Stoppie", SideWheelie = "Side Wheelie",
+		BackHop = "Back Hop", Jump = "Jump", Backflip = "Backflip",
+		Frontflip = "Frontflip", AutoSteer = "Auto-Steer"
+	}
+
+	for i, mode in ipairs(modeOrder) do
+		local col = math.floor((i - 1) % 2)
+		local row = math.floor((i - 1) / 2)
+
+		local btn = Instance.new("TextButton")
+		btn.Name = mode
+		btn.Size = UDim2.new(0.485, 0, 0, 32)
+		btn.Position = UDim2.new(col * 0.515, 0, 0, row * 38)
+		btn.BackgroundColor3 = T.Card
+		btn.BorderSizePixel = 0
+		btn.AutoButtonColor = false
+		btn.Text = ""
+		btn.Parent = modeGrid
+		corner(btn, 8)
+		stroke(btn, T.Border, 1)
+
+		-- Icon circle
+		local iconBg = Instance.new("Frame")
+		iconBg.Size = UDim2.new(0, 22, 0, 22)
+		iconBg.Position = UDim2.new(0, 8, 0.5, -11)
+		iconBg.BackgroundColor3 = ModeColors[mode]
+		iconBg.BackgroundTransparency = 0.85
+		iconBg.BorderSizePixel = 0
+		iconBg.Parent = btn
+		corner(iconBg, 6)
+
+		local iconLbl = Instance.new("TextLabel")
+		iconLbl.Size = UDim2.new(1, 0, 1, 0)
+		iconLbl.BackgroundTransparency = 1
+		iconLbl.Text = ModeIcons[mode]
+		iconLbl.TextColor3 = ModeColors[mode]
+		iconLbl.TextSize = 12
+		iconLbl.Font = Enum.Font.GothamBold
+		iconLbl.Parent = iconBg
+
+		-- Name
+		local nameLbl = Instance.new("TextLabel")
+		nameLbl.Size = UDim2.new(1, -40, 1, 0)
+		nameLbl.Position = UDim2.new(0, 36, 0, 0)
+		nameLbl.BackgroundTransparency = 1
+		nameLbl.Text = modeDisplayNames[mode]
+		nameLbl.TextColor3 = T.TextDim
+		nameLbl.TextSize = 11
+		nameLbl.Font = Enum.Font.GothamBold
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLbl.Parent = btn
+
+		-- Active indicator dot
+		local dot = Instance.new("Frame")
+		dot.Name = "Dot"
+		dot.Size = UDim2.new(0, 5, 0, 5)
+		dot.Position = UDim2.new(1, -12, 0.5, -2.5)
+		dot.BackgroundColor3 = ModeColors[mode]
+		dot.BackgroundTransparency = 1
+		dot.BorderSizePixel = 0
+		dot.Parent = btn
+		corner(dot, 3)
+
+		-- Hover
+		btn.MouseEnter:Connect(function()
+			if currentMode ~= mode then
+				tw(btn, {BackgroundColor3 = T.CardHover}, 0.15):Play()
+			end
+		end)
+		btn.MouseLeave:Connect(function()
+			if currentMode ~= mode then
+				tw(btn, {BackgroundColor3 = T.Card}, 0.15):Play()
+			end
+		end)
+
+		modeButtons[mode] = {button = btn, nameLbl = nameLbl, iconBg = iconBg, iconLbl = iconLbl, dot = dot}
+	end
+
+	----------------------------------------------
+	-- SECTION: Slider
+	----------------------------------------------
+	local sliderSection = Instance.new("Frame")
+	sliderSection.Name = "SliderSection"
+	sliderSection.Size = UDim2.new(1, 0, 0, 50)
+	sliderSection.BackgroundColor3 = T.Card
+	sliderSection.BorderSizePixel = 0
+	sliderSection.LayoutOrder = 3
+	sliderSection.Parent = content
+	corner(sliderSection, 8)
+	stroke(sliderSection, T.Border, 1)
+
+	local sliderLabel = Instance.new("TextLabel")
+	sliderLabel.Name = "SliderLabel"
+	sliderLabel.Size = UDim2.new(1, -20, 0, 14)
+	sliderLabel.Position = UDim2.new(0, 10, 0, 6)
+	sliderLabel.BackgroundTransparency = 1
+	sliderLabel.Text = "Angle: 45°"
+	sliderLabel.TextColor3 = T.TextDim
+	sliderLabel.TextSize = 10
+	sliderLabel.Font = Enum.Font.GothamMedium
+	sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+	sliderLabel.Parent = sliderSection
+
+	local sliderValueLabel = Instance.new("TextLabel")
+	sliderValueLabel.Size = UDim2.new(0, 50, 0, 14)
+	sliderValueLabel.Position = UDim2.new(1, -60, 0, 6)
+	sliderValueLabel.BackgroundTransparency = 1
+	sliderValueLabel.Text = "45"
+	sliderValueLabel.TextColor3 = T.Green
+	sliderValueLabel.TextSize = 11
+	sliderValueLabel.Font = Enum.Font.GothamBold
+	sliderValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+	sliderValueLabel.Parent = sliderSection
+
+	-- Slider track
+	local sliderTrack = Instance.new("Frame")
+	sliderTrack.Name = "Track"
+	sliderTrack.Size = UDim2.new(1, -24, 0, 4)
+	sliderTrack.Position = UDim2.new(0, 12, 0, 30)
+	sliderTrack.BackgroundColor3 = T.Bg
+	sliderTrack.BorderSizePixel = 0
+	sliderTrack.Active = true
+	sliderTrack.Parent = sliderSection
+	corner(sliderTrack, 2)
+
+	local sliderFill = Instance.new("Frame")
+	sliderFill.Name = "Fill"
+	sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
+	sliderFill.BackgroundColor3 = T.Green
+	sliderFill.BorderSizePixel = 0
+	sliderFill.Parent = sliderTrack
+	corner(sliderFill, 2)
+
+	-- Slider knob
+	local sliderKnob = Instance.new("Frame")
+	sliderKnob.Name = "Knob"
+	sliderKnob.Size = UDim2.new(0, 14, 0, 14)
+	sliderKnob.Position = UDim2.new(0.5, -7, 0, 25)
+	sliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	sliderKnob.BorderSizePixel = 0
+	sliderKnob.Active = true
+	sliderKnob.ZIndex = 3
+	sliderKnob.Parent = sliderSection
+	corner(sliderKnob, 7)
+	local knobStroke = stroke(sliderKnob, T.Green, 2)
+
+	----------------------------------------------
+	-- SECTION: Settings Toggles
+	----------------------------------------------
+	local settLabel = Instance.new("TextLabel")
+	settLabel.Size = UDim2.new(1, 0, 0, 16)
+	settLabel.BackgroundTransparency = 1
+	settLabel.Text = "SETTINGS"
+	settLabel.TextColor3 = T.TextMuted
+	settLabel.TextSize = 10
+	settLabel.Font = Enum.Font.GothamBold
+	settLabel.TextXAlignment = Enum.TextXAlignment.Left
+	settLabel.LayoutOrder = 4
+	settLabel.Parent = content
+
+	local function createToggle(text, order, defaultState, onChange)
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 32)
+		row.BackgroundColor3 = T.Card
+		row.BorderSizePixel = 0
+		row.LayoutOrder = order
+		row.Parent = content
+		corner(row, 8)
+		stroke(row, T.Border, 1)
+
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(1, -60, 1, 0)
+		lbl.Position = UDim2.new(0, 12, 0, 0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text
+		lbl.TextColor3 = T.TextDim
+		lbl.TextSize = 11
+		lbl.Font = Enum.Font.GothamMedium
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = row
+
+		-- Toggle switch
+		local toggleBg = Instance.new("TextButton")
+		toggleBg.Size = UDim2.new(0, 36, 0, 18)
+		toggleBg.Position = UDim2.new(1, -48, 0.5, -9)
+		toggleBg.BackgroundColor3 = defaultState and T.Accent or Color3.fromRGB(45, 45, 55)
+		toggleBg.BorderSizePixel = 0
+		toggleBg.Text = ""
+		toggleBg.AutoButtonColor = false
+		toggleBg.Parent = row
+		corner(toggleBg, 9)
+
+		local toggleDot = Instance.new("Frame")
+		toggleDot.Size = UDim2.new(0, 14, 0, 14)
+		toggleDot.Position = defaultState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+		toggleDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		toggleDot.BorderSizePixel = 0
+		toggleDot.Parent = toggleBg
+		corner(toggleDot, 7)
+
+		local state = defaultState or false
+
+		local function setToggle(val)
+			state = val
+			if state then
+				tw(toggleBg, {BackgroundColor3 = T.Accent}, 0.2):Play()
+				tw(toggleDot, {Position = UDim2.new(1, -16, 0.5, -7)}, 0.2):Play()
+			else
+				tw(toggleBg, {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}, 0.2):Play()
+				tw(toggleDot, {Position = UDim2.new(0, 2, 0.5, -7)}, 0.2):Play()
+			end
+		end
+
+		toggleBg.MouseButton1Click:Connect(function()
+			setToggle(not state)
+			if onChange then onChange(state) end
+		end)
+
+		return toggleBg, function() return state end, setToggle
+	end
+
+	local mouseWheelToggle, getMouseWheel, setMouseWheel = createToggle("Mouse Wheel Angle", 5, false, function(newState)
+		mouseWheelControlEnabled = newState
+	end)
+	local autoSwitchToggle, getAutoSwitch, setAutoSwitch = createToggle("Alt Switch (Wheelie / Stoppie)", 6, false, function(newState)
+		autoSwitchEnabled = newState
+	end)
+
+	-- Keybind button
+	local keybindRow = Instance.new("Frame")
+	keybindRow.Size = UDim2.new(1, 0, 0, 32)
+	keybindRow.BackgroundColor3 = T.Card
+	keybindRow.BorderSizePixel = 0
+	keybindRow.LayoutOrder = 7
+	keybindRow.Parent = content
+	corner(keybindRow, 8)
+	stroke(keybindRow, T.Border, 1)
+
+	local keybindLbl = Instance.new("TextLabel")
+	keybindLbl.Size = UDim2.new(1, -80, 1, 0)
+	keybindLbl.Position = UDim2.new(0, 12, 0, 0)
+	keybindLbl.BackgroundTransparency = 1
+	keybindLbl.Text = "Activation Key"
+	keybindLbl.TextColor3 = T.TextDim
+	keybindLbl.TextSize = 11
+	keybindLbl.Font = Enum.Font.GothamMedium
+	keybindLbl.TextXAlignment = Enum.TextXAlignment.Left
+	keybindLbl.Parent = keybindRow
+
+	local keybindBtn = Instance.new("TextButton")
+	keybindBtn.Size = UDim2.new(0, 56, 0, 20)
+	keybindBtn.Position = UDim2.new(1, -66, 0.5, -10)
+	keybindBtn.BackgroundColor3 = T.Bg
+	keybindBtn.BorderSizePixel = 0
+	keybindBtn.Text = "CTRL"
+	keybindBtn.TextColor3 = T.Accent
+	keybindBtn.TextSize = 10
+	keybindBtn.Font = Enum.Font.GothamBold
+	keybindBtn.AutoButtonColor = false
+	keybindBtn.Parent = keybindRow
+	corner(keybindBtn, 5)
+	stroke(keybindBtn, T.Accent, 1)
+
+	----------------------------------------------
+	-- STATUS BAR
+	----------------------------------------------
+	local statusBar = Instance.new("Frame")
+	statusBar.Size = UDim2.new(1, 0, 0, 30)
+	statusBar.BackgroundColor3 = T.Surface
+	statusBar.BackgroundTransparency = 0.5
+	statusBar.BorderSizePixel = 0
+	statusBar.LayoutOrder = 10
+	statusBar.Parent = content
+	corner(statusBar, 8)
+
+	-- Status dot
+	local statusDot = Instance.new("Frame")
+	statusDot.Size = UDim2.new(0, 6, 0, 6)
+	statusDot.Position = UDim2.new(0, 12, 0.5, -3)
+	statusDot.BackgroundColor3 = T.TextMuted
+	statusDot.BorderSizePixel = 0
+	statusDot.Parent = statusBar
+	corner(statusDot, 3)
+
+	local statusLabel = Instance.new("TextLabel")
+	statusLabel.Name = "Status"
+	statusLabel.Size = UDim2.new(1, -30, 1, 0)
+	statusLabel.Position = UDim2.new(0, 24, 0, 0)
+	statusLabel.BackgroundTransparency = 1
+	statusLabel.Text = "Press CTRL to activate"
+	statusLabel.TextColor3 = T.TextMuted
+	statusLabel.TextSize = 10
+	statusLabel.Font = Enum.Font.GothamMedium
+	statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+	statusLabel.Parent = statusBar
+	statusLabelRef = statusLabel
+
+	----------------------------------------------
+	-- SLIDER LOGIC
+	----------------------------------------------
+	local function updateSlider(value)
+		local mode = modeSettings[currentMode]
+		local col = ModeColors[currentMode] or T.Accent
+		local labelText, displayVal
+		local normalized = 0
+
+		if currentMode == "Wheelie" or currentMode == "Stoppie" then
+			normalized = math.clamp((value - mode.minAngle) / (mode.maxAngle - mode.minAngle), 0, 1)
+			labelText = currentMode .. " Angle"
+			displayVal = math.floor(value) .. "°"
+			mode.angle = value
+		elseif currentMode == "SideWheelie" then
+			normalized = math.clamp((value - mode.minTilt) / (mode.maxTilt - mode.minTilt), 0, 1)
+			labelText = "Side Tilt"
+			displayVal = math.floor(value) .. "°"
+			mode.tilt = value
+		elseif currentMode == "BackHop" then
+			normalized = math.clamp((value - mode.minHopPower) / (mode.maxHopPower - mode.minHopPower), 0, 1)
+			labelText = "Hop Power"
+			displayVal = tostring(math.floor(value))
+			mode.hopPower = value
+		elseif currentMode == "Jump" then
+			normalized = math.clamp((value - mode.minPower) / (mode.maxPower - mode.minPower), 0, 1)
+			labelText = "Jump Power"
+			displayVal = tostring(math.floor(value))
+			mode.power = value
+		elseif currentMode == "Backflip" or currentMode == "Frontflip" then
+			normalized = math.clamp((value - mode.minSpeed) / (mode.maxSpeed - mode.minSpeed), 0, 1)
+			labelText = currentMode .. " Speed"
+			displayVal = tostring(math.floor(value * 10) / 10)
+			mode.speed = value
+		elseif currentMode == "AutoSteer" then
+			sliderSection.Visible = false
+			return
+		end
+
+		sliderSection.Visible = true
+		sliderFill.Size = UDim2.new(normalized, 0, 1, 0)
+		sliderFill.BackgroundColor3 = col
+		sliderKnob.Position = UDim2.new(0, 12 + normalized * (sliderSection.AbsoluteSize.X - 24 - 14), 0, 25)
+		knobStroke.Color = col
+		sliderLabel.Text = labelText
+		sliderValueLabel.Text = displayVal
+		sliderValueLabel.TextColor3 = col
+	end
+	updateSliderRef = updateSlider
+
+	-- Slider interaction
+	local sliderDragging = false
+
+	local function handleSliderInput()
+		local mousePos = UserInputService:GetMouseLocation()
+		local trackPos = sliderTrack.AbsolutePosition
+		local trackSize = sliderTrack.AbsoluteSize
+		local normalizedX = math.clamp((mousePos.X - trackPos.X) / trackSize.X, 0, 1)
+		local mode = modeSettings[currentMode]
+
+		if currentMode == "Wheelie" or currentMode == "Stoppie" then
+			updateSlider(mode.minAngle + normalizedX * (mode.maxAngle - mode.minAngle))
+		elseif currentMode == "SideWheelie" then
+			updateSlider(mode.minTilt + normalizedX * (mode.maxTilt - mode.minTilt))
+		elseif currentMode == "BackHop" then
+			updateSlider(mode.minHopPower + normalizedX * (mode.maxHopPower - mode.minHopPower))
+		elseif currentMode == "Jump" then
+			updateSlider(mode.minPower + normalizedX * (mode.maxPower - mode.minPower))
+		elseif currentMode == "Backflip" or currentMode == "Frontflip" then
+			updateSlider(mode.minSpeed + normalizedX * (mode.maxSpeed - mode.minSpeed))
+		end
+	end
+
+	sliderTrack.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			sliderDragging = true
+			handleSliderInput()
+		end
+	end)
+
+	sliderKnob.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			sliderDragging = true
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			sliderDragging = false
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if sliderDragging then handleSliderInput() end
+	end)
+
+	----------------------------------------------
+	-- MODE SWITCHING
+	----------------------------------------------
+	local function switchMode(mode)
+		currentMode = mode
+		local col = ModeColors[mode] or T.Accent
+
+		-- Reset all buttons
+		for m, refs in pairs(modeButtons) do
+			local isActive = (m == mode)
+			local c = ModeColors[m]
+			tw(refs.button, {BackgroundColor3 = isActive and c or T.Card}, 0.2):Play()
+			refs.button.BackgroundTransparency = isActive and 0.85 or 0
+			tw(refs.nameLbl, {TextColor3 = isActive and T.Text or T.TextDim}, 0.2):Play()
+			tw(refs.dot, {BackgroundTransparency = isActive and 0 or 1}, 0.2):Play()
+			-- Update stroke
+			local s = refs.button:FindFirstChildOfClass("UIStroke")
+			if s then tw(s, {Color = isActive and c or T.Border}, 0.2):Play() end
+		end
+
+		-- Update slider
+		if mode == "Wheelie" then updateSlider(modeSettings.Wheelie.angle)
+		elseif mode == "Stoppie" then updateSlider(modeSettings.Stoppie.angle)
+		elseif mode == "SideWheelie" then updateSlider(modeSettings.SideWheelie.tilt)
+		elseif mode == "BackHop" then updateSlider(modeSettings.BackHop.hopPower)
+		elseif mode == "Jump" then updateSlider(modeSettings.Jump.power)
+		elseif mode == "Backflip" then updateSlider(modeSettings.Backflip.speed)
+		elseif mode == "Frontflip" then updateSlider(modeSettings.Frontflip.speed)
+		elseif mode == "AutoSteer" then sliderSection.Visible = false
+		end
+	end
+	switchModeRef = switchMode
+
+	-- Wire up mode buttons
+	for mode, refs in pairs(modeButtons) do
+		refs.button.MouseButton1Click:Connect(function() switchMode(mode) end)
+	end
+
+	----------------------------------------------
+	-- TOGGLE CALLBACKS
+	----------------------------------------------
+	keybindBtn.MouseButton1Click:Connect(function()
+		if activationKey == Enum.KeyCode.LeftControl then
+			activationKey = Enum.KeyCode.LeftShift
+			keybindBtn.Text = "SHIFT"
+			statusLabel.Text = "Press SHIFT to activate"
+		else
+			activationKey = Enum.KeyCode.LeftControl
+			keybindBtn.Text = "CTRL"
+			statusLabel.Text = "Press CTRL to activate"
+		end
+	end)
+
+	----------------------------------------------
+	-- REFRESH
+	----------------------------------------------
+	refreshBtn.MouseButton1Click:Connect(function()
+		-- Reset all state
+		isActive = false; motorcycle = nil; originalNeutralCFrame = nil; targetYRotation = 0
+		if bodyGyro and bodyGyro.Parent then bodyGyro:Destroy() end; bodyGyro = nil
+		if bodyPosition and bodyPosition.Parent then bodyPosition:Destroy() end; bodyPosition = nil
+		if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+		autoSteerEnabled = false
+		if autoSteerConnection then autoSteerConnection:Disconnect(); autoSteerConnection = nil end
+		if waypointMarker and waypointMarker.Parent then waypointMarker:Destroy() end
+		waypointMarker = nil; waypointPosition = nil
+
+		-- Fade OUT
+		tw(main, {BackgroundTransparency = 0.7}, 0.2):Play()
+		for _, child in ipairs(main:GetDescendants()) do
+			if child:IsA("TextLabel") or child:IsA("TextButton") then
+				tw(child, {TextTransparency = 0.7}, 0.2):Play()
+			end
+			if child:IsA("Frame") and child.BackgroundTransparency < 0.8 and child.Name ~= "Fill" then
+				tw(child, {BackgroundTransparency = 0.7}, 0.2):Play()
+			end
+			if child:IsA("ImageLabel") then
+				tw(child, {ImageTransparency = 0.9}, 0.2):Play()
+			end
+		end
+
+		task.wait(0.25)
+
+		-- Fade IN
+		tw(main, {BackgroundTransparency = 0}, 0.25):Play()
+		for _, child in ipairs(main:GetDescendants()) do
+			if child:IsA("TextLabel") then
+				tw(child, {TextTransparency = 0}, 0.25):Play()
+			elseif child:IsA("TextButton") then
+				tw(child, {TextTransparency = 0}, 0.25):Play()
+			end
+			if child:IsA("ImageLabel") and child.Name == "Shadow" then
+				tw(child, {ImageTransparency = 0.4}, 0.25):Play()
+			end
+		end
+
+		-- Re-apply correct transparencies for mode buttons after fade
+		task.wait(0.3)
+		if switchModeRef then switchModeRef(currentMode) end
+	end)
+
+	----------------------------------------------
+	-- MINIMIZE / DRAG
+	----------------------------------------------
+	local minimized = false
+	local TARGET_HEIGHT = 520
+
+	-- Dragging
+	local dragging, dragStart, startPos = false, nil, nil
+
+	header.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true; dragStart = input.Position; startPos = main.Position
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	minBtn.MouseButton1Click:Connect(function()
+		minimized = not minimized
+		if minimized then
+			tw(main, {Size = UDim2.new(0, 300, 0, 52)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
+		else
+			tw(main, {Size = UDim2.new(0, 300, 0, TARGET_HEIGHT)}, 0.35, Enum.EasingStyle.Back):Play()
+		end
+	end)
+
+	-- M key toggle
+	UserInputService.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if input.KeyCode == Enum.KeyCode.M then
+			minimized = not minimized
+			if minimized then
+				tw(main, {Size = UDim2.new(0, 300, 0, 52)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
+			else
+				tw(main, {Size = UDim2.new(0, 300, 0, TARGET_HEIGHT)}, 0.35, Enum.EasingStyle.Back):Play()
+			end
+		end
+	end)
+
+	----------------------------------------------
+	-- OPEN ANIMATION
+	----------------------------------------------
+	main.BackgroundTransparency = 1
+	main.Size = UDim2.new(0, 300, 0, 0)
+	sg.Parent = player:WaitForChild("PlayerGui")
+
+	task.wait(0.05)
+	tw(main, {Size = UDim2.new(0, 300, 0, TARGET_HEIGHT), BackgroundTransparency = 0}, 0.45, Enum.EasingStyle.Back):Play()
+
+	-- Initialize mode
+	switchMode("Wheelie")
+
+	----------------------------------------------
+	-- STATUS UPDATE FUNCTION
+	----------------------------------------------
+	local function updateStatus(active)
+		local col = ModeColors[currentMode] or T.Accent
+		if active then
+			statusLabel.Text = currentMode:upper() .. " ACTIVE"
+			statusLabel.TextColor3 = col
+			statusDot.BackgroundColor3 = col
+		else
+			if currentMode == "AutoSteer" then
+				statusLabel.Text = "Click to set waypoint"
+				statusLabel.TextColor3 = T.Cyan
+				statusDot.BackgroundColor3 = T.Cyan
+			else
+				local keyName = activationKey == Enum.KeyCode.LeftControl and "CTRL" or "SHIFT"
+				statusLabel.Text = "Press " .. keyName .. " to activate"
+				statusLabel.TextColor3 = T.TextMuted
+				statusDot.BackgroundColor3 = T.TextMuted
+			end
+		end
+	end
+
+	return updateStatus
+end
+
+------------------------------------------------------
+--                 INIT & INPUT                     --
+------------------------------------------------------
+
+local updateStatus = createGUI()
 
 -- Input handling
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    -- Handle Click for waypoint placement (Auto-Steer mode only - no Ctrl needed)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and currentMode == "AutoSteer" then
-        -- Get mouse position in 3D world
-        local mouse = player:GetMouse()
-        local camera = workspace.CurrentCamera
-        
-        -- Raycast from camera to mouse position, ignoring invisible parts
-        local mouseRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-        rayParams.FilterDescendantsInstances = {character}
-        rayParams.IgnoreWater = true
-        
-        -- Custom raycast that skips transparent/invisible parts
-        local rayOrigin = mouseRay.Origin
-        local rayDirection = mouseRay.Direction * 1000
-        local hitPosition = nil
-        
-        -- Keep raycasting until we hit something visible
-        local maxAttempts = 10
-        for i = 1, maxAttempts do
-            local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
-            
-            if not rayResult then
-                break -- Nothing hit
-            end
-            
-            local hitPart = rayResult.Instance
-            
-            -- Check if part is fully visible (Transparency very low)
-            if hitPart.Transparency <= 0.1 then
-                -- Found a visible part!
-                hitPosition = rayResult.Position
-                break
-            else
-                -- Invisible part - add to filter and continue
-                local currentFilter = rayParams.FilterDescendantsInstances
-                table.insert(currentFilter, hitPart)
-                rayParams.FilterDescendantsInstances = currentFilter
-            end
-        end
-        
-        if hitPosition then
-            -- Now raycast DOWN from that point to find the actual ground
-            local groundRayParams = RaycastParams.new()
-            groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
-            groundRayParams.FilterDescendantsInstances = {character}
-            
-            -- Custom ground raycast that skips invisible parts
-            local groundOrigin = hitPosition
-            local groundDirection = Vector3.new(0, -500, 0)
-            local finalPosition = hitPosition
-            
-            for i = 1, maxAttempts do
-                local groundRay = workspace:Raycast(groundOrigin, groundDirection, groundRayParams)
-                
-                if not groundRay then
-                    break -- No ground found, use current position
-                end
-                
-                local groundPart = groundRay.Instance
-                
-                if groundPart.Transparency <= 0.1 then
-                    -- Found visible ground! Add offset to stay above ground
-                    finalPosition = groundRay.Position + Vector3.new(0, 2, 0)
-                    break
-                else
-                    -- Invisible part - add to filter and continue
-                    local currentFilter = groundRayParams.FilterDescendantsInstances
-                    table.insert(currentFilter, groundPart)
-                    groundRayParams.FilterDescendantsInstances = currentFilter
-                end
-            end
-            
-            waypointPosition = finalPosition
-            
-            -- Delete old marker
-            if waypointMarker and waypointMarker.Parent then
-                waypointMarker:Destroy()
-            end
-            
-            -- Create new waypoint marker (optimized for less lag)
-            waypointMarker = Instance.new("Part")
-            waypointMarker.Name = "WaypointMarker"
-            waypointMarker.Size = Vector3.new(2, 5, 2)
-            waypointMarker.Position = waypointPosition + Vector3.new(0, 2.5, 0)
-            waypointMarker.Anchored = true
-            waypointMarker.CanCollide = false
-            waypointMarker.Material = Enum.Material.Neon
-            waypointMarker.Color = Color3.fromRGB(80, 200, 200)
-            waypointMarker.Transparency = 0.4
-            waypointMarker.Parent = workspace
-            
-            -- Add a glow effect (reduced range for performance)
-            local pointLight = Instance.new("PointLight")
-            pointLight.Brightness = 1.5
-            pointLight.Range = 15
-            pointLight.Color = Color3.fromRGB(80, 200, 200)
-            pointLight.Parent = waypointMarker
-            
-            -- AUTO-ACTIVATE steering immediately
-            doTrick()
-            updateStatus(true)
-            
-            return
-        end
-    end
-    
-    if input.KeyCode == activationKey then
-        isActive = true
-        doTrick()
-        updateStatus(true)
-    end
-    
-    -- Alt key to switch between Wheelie and Stoppie
-    if input.KeyCode == Enum.KeyCode.LeftAlt and autoSwitchEnabled then
-        if currentMode == "Wheelie" then
-            currentMode = "Stoppie"
-        elseif currentMode == "Stoppie" then
-            currentMode = "Wheelie"
-        end
-        
-        -- If active, restart the trick with new mode
-        if isActive then
-            stopTrick()
-            doTrick()
-        end
-    end
+	if gameProcessed then return end
+
+	-- Waypoint placement for AutoSteer
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and currentMode == "AutoSteer" then
+		local mouse = player:GetMouse()
+		local camera = workspace.CurrentCamera
+		local mouseRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
+		local rayParams = RaycastParams.new()
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+		rayParams.FilterDescendantsInstances = {character}
+		rayParams.IgnoreWater = true
+		local rayOrigin = mouseRay.Origin
+		local rayDirection = mouseRay.Direction * 1000
+		local hitPosition = nil
+		local maxAttempts = 10
+		for i = 1, maxAttempts do
+			local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+			if not rayResult then break end
+			if rayResult.Instance.Transparency <= 0.1 then
+				hitPosition = rayResult.Position; break
+			else
+				local f = rayParams.FilterDescendantsInstances
+				table.insert(f, rayResult.Instance)
+				rayParams.FilterDescendantsInstances = f
+			end
+		end
+		if hitPosition then
+			local groundRayParams = RaycastParams.new()
+			groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
+			groundRayParams.FilterDescendantsInstances = {character}
+			local finalPosition = hitPosition
+			for i = 1, maxAttempts do
+				local groundRay = workspace:Raycast(hitPosition, Vector3.new(0, -500, 0), groundRayParams)
+				if not groundRay then break end
+				if groundRay.Instance.Transparency <= 0.1 then
+					finalPosition = groundRay.Position + Vector3.new(0, 2, 0); break
+				else
+					local f = groundRayParams.FilterDescendantsInstances
+					table.insert(f, groundRay.Instance)
+					groundRayParams.FilterDescendantsInstances = f
+				end
+			end
+			waypointPosition = finalPosition
+			if waypointMarker and waypointMarker.Parent then waypointMarker:Destroy() end
+			waypointMarker = Instance.new("Part")
+			waypointMarker.Name = "WaypointMarker"
+			waypointMarker.Size = Vector3.new(2, 5, 2)
+			waypointMarker.Position = waypointPosition + Vector3.new(0, 2.5, 0)
+			waypointMarker.Anchored = true
+			waypointMarker.CanCollide = false
+			waypointMarker.Material = Enum.Material.Neon
+			waypointMarker.Color = Color3.fromRGB(34, 211, 238)
+			waypointMarker.Transparency = 0.4
+			waypointMarker.Parent = workspace
+			local pl = Instance.new("PointLight")
+			pl.Brightness = 1.5; pl.Range = 15
+			pl.Color = Color3.fromRGB(34, 211, 238)
+			pl.Parent = waypointMarker
+			doTrick()
+			updateStatus(true)
+			return
+		end
+	end
+
+	if input.KeyCode == activationKey then
+		isActive = true
+		doTrick()
+		updateStatus(true)
+	end
+
+	if input.KeyCode == Enum.KeyCode.LeftAlt and autoSwitchEnabled then
+		if currentMode == "Wheelie" then
+			currentMode = "Stoppie"
+		elseif currentMode == "Stoppie" then
+			currentMode = "Wheelie"
+		end
+		if switchModeRef then switchModeRef(currentMode) end
+		if isActive then
+			stopTrick()
+			doTrick()
+		end
+	end
 end)
 
 UserInputService.InputEnded:Connect(function(input, gameProcessed)
-    if input.KeyCode == activationKey then
-        isActive = false
-        stopTrick()
-        updateStatus(false)
-    end
+	if input.KeyCode == activationKey then
+		isActive = false
+		stopTrick()
+		updateStatus(false)
+	end
 end)
 
--- Mouse Wheel Input for Wheelie/Stoppie/SideWheelie angle control
+-- Mouse wheel angle control
 UserInputService.InputChanged:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.MouseWheel and mouseWheelControlEnabled then
-        -- Only work for Wheelie, Stoppie, and SideWheelie modes
-        if currentMode == "Wheelie" or currentMode == "Stoppie" then
-            local mode = modeSettings[currentMode]
-            local scrollDirection = input.Position.Z -- 1 = up, -1 = down
-            
-            -- Adjust angle based on scroll direction
-            local newAngle = mode.angle + (scrollDirection * MOUSE_WHEEL_SENSITIVITY)
-            newAngle = math.clamp(newAngle, mode.minAngle, mode.maxAngle)
-            
-            mode.angle = newAngle
-        elseif currentMode == "SideWheelie" then
-            local mode = modeSettings[currentMode]
-            local scrollDirection = input.Position.Z -- 1 = up, -1 = down
-            
-            -- Adjust tilt based on scroll direction
-            local newTilt = mode.tilt + (scrollDirection * MOUSE_WHEEL_SENSITIVITY)
-            newTilt = math.clamp(newTilt, mode.minTilt, mode.maxTilt)
-            
-            mode.tilt = newTilt
-        end
-    end
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.MouseWheel and mouseWheelControlEnabled then
+		if currentMode == "Wheelie" or currentMode == "Stoppie" then
+			local mode = modeSettings[currentMode]
+			local scrollDir = input.Position.Z
+			local newAngle = math.clamp(mode.angle + scrollDir * MOUSE_WHEEL_SENSITIVITY, mode.minAngle, mode.maxAngle)
+			mode.angle = newAngle
+			if updateSliderRef then updateSliderRef(newAngle) end
+		elseif currentMode == "SideWheelie" then
+			local mode = modeSettings.SideWheelie
+			local scrollDir = input.Position.Z
+			local newTilt = math.clamp(mode.tilt + scrollDir * MOUSE_WHEEL_SENSITIVITY, mode.minTilt, mode.maxTilt)
+			mode.tilt = newTilt
+			if updateSliderRef then updateSliderRef(newTilt) end
+		end
+	end
 end)
 
--- Cleanup and respawn handling
+-- Cleanup
 character.Humanoid.Died:Connect(function()
-    if updateConnection then
-        updateConnection:Disconnect()
-        updateConnection = nil
-    end
-    stopTrick()
-    resetState()
+	if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+	stopTrick()
+	resetState()
 end)
 
--- Handle character respawn
 player.CharacterAdded:Connect(function(newCharacter)
-    character = newCharacter
-    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-    
-    -- Reset all state
-    resetState()
-    
-    -- Reconnect death handler
-    character.Humanoid.Died:Connect(function()
-        if updateConnection then
-            updateConnection:Disconnect()
-            updateConnection = nil
-        end
-        stopTrick()
-        resetState()
-    end)
+	character = newCharacter
+	humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+	resetState()
+	character.Humanoid.Died:Connect(function()
+		if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
+		stopTrick()
+		resetState()
+	end)
 end)
+
+print("✅ Vehicle Tricks loaded!")
