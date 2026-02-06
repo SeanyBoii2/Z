@@ -20,28 +20,28 @@ local bodyVelocity, bodyGyro
 local screenGui, toggleButton, speedBox
 local animations, tracks = {}, {}
 
-local gyroSmoothness = 10 -- smoother body rotation
+local gyroSmoothness = 10
+
+-- Anti-interrupt state
+local protectionLoop = nil
+local savedProperties = {} -- stores original character state for clean restore
 
 --== CAMERA FOV HANDLING ==--
 local defaultFOV = Camera.FieldOfView
 local targetFOV = defaultFOV
-local tween
+local tweenFOV
 
 local function setFOV(newFOV)
-	if tween then tween:Cancel() end
+	if tweenFOV then tweenFOV:Cancel() end
 	targetFOV = newFOV
-	tween = TweenService:Create(Camera, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {FieldOfView = targetFOV})
-	tween:Play()
+	tweenFOV = TweenService:Create(Camera, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {FieldOfView = targetFOV})
+	tweenFOV:Play()
 end
 
 local function updateFOV()
 	local fov = defaultFOV
-	if flying then
-		fov = fov + 10
-	end
-	if boostEnabled then
-		fov = fov + 20
-	end
+	if flying then fov = fov + 10 end
+	if boostEnabled then fov = fov + 20 end
 	setFOV(fov)
 end
 
@@ -68,8 +68,8 @@ local function setupAnimations()
 		back3 = newAnim(214744412),
 		back4 = newAnim(214744412),
 		down = newAnim(233322916),
-		idle1 = newAnim(97171309),     -- main idle (dominant)
-		idleHover = newAnim(313762630) -- hover overlay (subtle)
+		idle1 = newAnim(97171309),
+		idleHover = newAnim(313762630)
 	}
 	tracks = {}
 	for name, anim in pairs(animations) do
@@ -85,54 +85,285 @@ local function stopAll()
 	end
 end
 
---== PHYSICS ==--
-local function ensurePhysics()
-	if not bodyVelocity or not bodyVelocity:IsDescendantOf(HRP) then
-		bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-		bodyVelocity.Velocity = Vector3.zero
-		bodyVelocity.Parent = HRP
-	end
-	if not bodyGyro or not bodyGyro:IsDescendantOf(HRP) then
-		bodyGyro = Instance.new("BodyGyro")
-		bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-		bodyGyro.CFrame = Camera.CFrame
-		bodyGyro.P = 3000
-		bodyGyro.D = 200
-		bodyGyro.Parent = HRP
+--== ANTI-INTERRUPT: Aggressively maintain physics objects ==--
+local function nukeExternalForces()
+	if not HRP then return end
+	-- Destroy any BodyMovers that aren't ours
+	for _, obj in ipairs(HRP:GetChildren()) do
+		if (obj:IsA("BodyVelocity") or obj:IsA("BodyForce") or obj:IsA("BodyPosition")
+			or obj:IsA("BodyThrust") or obj:IsA("VectorForce") or obj:IsA("LinearVelocity")
+			or obj:IsA("AlignPosition") or obj:IsA("AlignOrientation")
+			or obj:IsA("BodyAngularVelocity")) then
+			-- Only destroy if it's NOT our fly objects
+			if obj ~= bodyVelocity and obj ~= bodyGyro then
+				obj:Destroy()
+			end
+		end
 	end
 end
 
+local function ensurePhysics()
+	if not HRP then return end
+
+	-- If our BodyVelocity got destroyed or reparented, recreate it
+	if not bodyVelocity or not bodyVelocity.Parent or bodyVelocity.Parent ~= HRP then
+		if bodyVelocity then pcall(function() bodyVelocity:Destroy() end) end
+		bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.Name = "SUPERMAN_VEL"
+		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		bodyVelocity.Velocity = Vector3.zero
+		bodyVelocity.P = 10000
+		bodyVelocity.Parent = HRP
+	else
+		-- Force max force every frame in case something changed it
+		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+	end
+
+	-- Same for BodyGyro
+	if not bodyGyro or not bodyGyro.Parent or bodyGyro.Parent ~= HRP then
+		if bodyGyro then pcall(function() bodyGyro:Destroy() end) end
+		bodyGyro = Instance.new("BodyGyro")
+		bodyGyro.Name = "SUPERMAN_GYRO"
+		bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		bodyGyro.CFrame = Camera.CFrame
+		bodyGyro.P = 5000
+		bodyGyro.D = 300
+		bodyGyro.Parent = HRP
+	else
+		bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+	end
+end
+
+local function forceHumanoidState()
+	if not humanoid then return end
+	-- Keep PlatformStand true no matter what
+	humanoid.PlatformStand = true
+
+	-- Override any state changes that would ground us
+	pcall(function()
+		if humanoid:GetState() ~= Enum.HumanoidStateType.Physics
+			and humanoid:GetState() ~= Enum.HumanoidStateType.PlatformStanding then
+			humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		end
+	end)
+
+	-- Prevent ragdoll / fling by zeroing out assembly velocity if we control it
+	-- (we set velocity ourselves each frame so this just prevents external spikes)
+end
+
+local function disableCharacterCollisions()
+	if not character then return end
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			-- Save original state
+			if not savedProperties[part] then
+				savedProperties[part] = {
+					CanCollide = part.CanCollide,
+					Massless = part.Massless,
+				}
+			end
+			-- Make massless so external forces have less effect
+			part.Massless = true
+		end
+	end
+end
+
+local function restoreCharacterCollisions()
+	for part, props in pairs(savedProperties) do
+		if part and part.Parent then
+			pcall(function()
+				part.CanCollide = props.CanCollide
+				part.Massless = props.Massless
+			end)
+		end
+	end
+	savedProperties = {}
+end
+
+--== START / STOP FLYING ==--
 local animateScript
+local stateChangedConn
+local ancestryConnections = {}
 
 local function startFlying()
 	flying = true
 	forwardHold = 0
 	flySpeed = baseSpeed
-	ensurePhysics()
-	humanoid.PlatformStand = true
-	updateFOV()
 
-	-- disable default Animate
+	-- Save and disable Animate script
 	if not animateScript and character then
 		animateScript = character:FindFirstChild("Animate")
 	end
 	if animateScript then
 		animateScript.Enabled = false
 	end
+
+	-- Disable humanoid states that could interrupt flight
+	pcall(function()
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+	end)
+
+	-- Make character parts massless
+	disableCharacterCollisions()
+
+	-- Create physics
+	ensurePhysics()
+	humanoid.PlatformStand = true
+	updateFOV()
+
+	-- Monitor if our physics objects get destroyed (anti-tamper)
+	-- BodyVelocity ancestry watch
+	for _, conn in ipairs(ancestryConnections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	ancestryConnections = {}
+
+	if bodyVelocity then
+		local conn = bodyVelocity.AncestryChanged:Connect(function(_, newParent)
+			if flying and (not newParent or newParent ~= HRP) then
+				task.defer(ensurePhysics)
+			end
+		end)
+		table.insert(ancestryConnections, conn)
+	end
+	if bodyGyro then
+		local conn = bodyGyro.AncestryChanged:Connect(function(_, newParent)
+			if flying and (not newParent or newParent ~= HRP) then
+				task.defer(ensurePhysics)
+			end
+		end)
+		table.insert(ancestryConnections, conn)
+	end
+
+	-- State change listener - force back to physics state
+	if stateChangedConn then pcall(function() stateChangedConn:Disconnect() end) end
+	stateChangedConn = humanoid.StateChanged:Connect(function(_, newState)
+		if not flying then return end
+		if newState ~= Enum.HumanoidStateType.Physics
+			and newState ~= Enum.HumanoidStateType.PlatformStanding then
+			task.defer(function()
+				if flying and humanoid then
+					humanoid.PlatformStand = true
+					pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Physics) end)
+				end
+			end)
+		end
+	end)
+
+	-- Protection loop: runs every 0.1s as backup
+	if protectionLoop then pcall(function() protectionLoop:Disconnect() end) end
+	local protectionTimer = 0
+	protectionLoop = RunService.Heartbeat:Connect(function(dt)
+		if not flying then return end
+		protectionTimer = protectionTimer + dt
+		if protectionTimer < 0.1 then return end
+		protectionTimer = 0
+
+		-- Re-ensure physics exist
+		ensurePhysics()
+		-- Kill external forces
+		nukeExternalForces()
+		-- Force humanoid state
+		forceHumanoidState()
+		-- Keep parts massless
+		if character then
+			for _, part in ipairs(character:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Massless = true
+				end
+			end
+		end
+	end)
 end
 
 local function stopFlying()
 	flying = false
-	if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-	if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-	humanoid.PlatformStand = false
+
+	-- Stop protection loop
+	if protectionLoop then
+		protectionLoop:Disconnect()
+		protectionLoop = nil
+	end
+
+	-- Disconnect state watcher
+	if stateChangedConn then
+		stateChangedConn:Disconnect()
+		stateChangedConn = nil
+	end
+
+	-- Disconnect ancestry watchers
+	for _, conn in ipairs(ancestryConnections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	ancestryConnections = {}
+
+	-- Remove physics objects cleanly
+	if bodyVelocity then
+		pcall(function() bodyVelocity:Destroy() end)
+		bodyVelocity = nil
+	end
+	if bodyGyro then
+		pcall(function() bodyGyro:Destroy() end)
+		bodyGyro = nil
+	end
+
+	-- Restore humanoid to fully normal state
+	if humanoid then
+		humanoid.PlatformStand = false
+
+		pcall(function()
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+		end)
+
+		-- Force back to running state
+		pcall(function()
+			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end)
+		task.delay(0.1, function()
+			if humanoid and not flying then
+				pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end)
+			end
+		end)
+	end
+
+	-- Restore character part properties
+	restoreCharacterCollisions()
+
+	-- Stop animations
 	stopAll()
+
+	-- Restore FOV
 	updateFOV()
 
-	-- re-enable Animate
+	-- Re-enable Animate
 	if animateScript then
 		animateScript.Enabled = true
+	end
+
+	-- Zero out any residual velocity so player doesn't fling
+	if HRP then
+		pcall(function()
+			HRP.AssemblyLinearVelocity = Vector3.zero
+			HRP.AssemblyAngularVelocity = Vector3.zero
+		end)
 	end
 end
 
@@ -239,7 +470,11 @@ RunService.RenderStepped:Connect(function(dt)
 	if not character or not character:IsDescendantOf(workspace) then return end
 	if not humanoid or not HRP then return end
 
+	-- Aggressively ensure our physics objects exist every single frame
 	ensurePhysics()
+
+	-- Force humanoid state every frame
+	humanoid.PlatformStand = true
 
 	local dir = Vector3.zero
 	local camCF = Camera.CFrame
@@ -266,11 +501,24 @@ RunService.RenderStepped:Connect(function(dt)
 	local currentSpeed = flySpeed
 	if boostEnabled then currentSpeed += 100 end
 
+	-- Set velocity directly - math.huge MaxForce ensures nothing overrides this
 	bodyVelocity.Velocity = dir * currentSpeed
 
+	-- Also directly override assembly velocity as backup
+	-- This catches cases where server-side forces try to override
+	if dir.Magnitude > 0 then
+		HRP.AssemblyLinearVelocity = dir * currentSpeed
+	else
+		-- When idle, zero velocity and hold position
+		HRP.AssemblyLinearVelocity = Vector3.zero
+	end
+
+	-- Smooth gyro
 	local alpha = 1 - math.exp(-gyroSmoothness * dt)
 	bodyGyro.CFrame = bodyGyro.CFrame:Lerp(camCF, alpha)
-	humanoid.PlatformStand = true
+
+	-- Kill angular velocity every frame to prevent spinning/tumbling from external hits
+	HRP.AssemblyAngularVelocity = Vector3.zero
 
 	-- Anim logic
 	if inputFlags.up then
@@ -313,12 +561,9 @@ RunService.RenderStepped:Connect(function(dt)
 	else
 		if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
 			stopAll()
-
-			-- Idle dominant blend
 			tracks.idle1:Play()
 			tracks.idle1:AdjustWeight(1)
 			tracks.idle1:AdjustSpeed(0)
-
 			tracks.idleHover:Play()
 			tracks.idleHover:AdjustWeight(2)
 			tracks.idleHover:AdjustSpeed(1)
@@ -346,4 +591,4 @@ bindInput()
 player.CharacterAdded:Connect(bindCharacter)
 bindCharacter()
 
-print("✅ Fly system loaded with idle + hover blend (no hover bob)")
+print("Superman Fly loaded - UNSTOPPABLE mode")
