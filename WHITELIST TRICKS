@@ -338,7 +338,7 @@ for i, scriptData in ipairs(SCRIPTS) do
 
 	-- Description
 	local DescLabel = Instance.new("TextLabel")
-	DescLabel.Size = UDim2.new(1, -80, 0, 28)
+	DescLabel.Size = UDim2.new(1, -150, 0, 28)
 	DescLabel.Position = UDim2.new(0, 66, 0, 36)
 	DescLabel.BackgroundTransparency = 1
 	DescLabel.Text = scriptData.Description
