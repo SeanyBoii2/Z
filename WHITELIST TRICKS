@@ -3,7 +3,7 @@
 --================================--
 local WHITELISTED_USERS = {
 	"ULTIMATEGODLUFFY",
-	"ModeratorJuli2",
+	"1TtrapYt",
 }
 
 --================================--
@@ -27,6 +27,12 @@ local SCRIPTS = {
 		Description = "Automatically farm NPCs with targeting and auto kill",
 		Icon = "🎯",
 		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Universal%20Npc%20Autofarm",
+	},
+	{
+		Name = "Infinite Yield",
+		Description = "Powerful admin command script with 200+ commands",
+		Icon = "⚡",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Infinite%20Yield",
 	},
 }
 
