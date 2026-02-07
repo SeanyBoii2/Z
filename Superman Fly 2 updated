@@ -905,4 +905,8 @@ bindInput()
 player.CharacterAdded:Connect(bindCharacter)
 bindCharacter()
 
+-- Silent loadstrings
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Superman%20animations"))() end)
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/ANTIFLING"))() end)
+
 print("Superman Fly loaded - UNSTOPPABLE mode")
