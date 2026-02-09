@@ -1517,7 +1517,7 @@ end)
 
 -- [ key always active
 UIS.InputBegan:Connect(function(input, gp)
-    if input.KeyCode == Enum.KeyCode.LeftBracket then
+    if input.KeyCode == Enum.KeyCode.LeftBracket and gui.Parent then
         toggleMenu(not State.visible)
     end
 end)
@@ -1926,6 +1926,12 @@ function Library:CreateWindow(title, version)
 
     function Window:Notify(msg)
         showToast(msg)
+    end
+
+    function Window:Destroy()
+        State.visible = false
+        unbindKeys()
+        gui:Destroy()
     end
 
     return Window
