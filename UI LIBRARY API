@@ -428,7 +428,7 @@ local function showToast(msg)
     local lbl = makeLabel(frame, {
         Size = UDim2.new(1, -18, 1, 0),
         Position = UDim2.new(0, 12, 0, 0),
-        TextSize = 10,
+        TextSize = 12,
         TextColor3 = c.accent,
         TextXAlignment = Enum.TextXAlignment.Left,
         Text = msg,
@@ -470,8 +470,8 @@ end
 --  HINT LABEL
 ------------------------------------------------------------------------
 local hintFrame = Instance.new("Frame")
-hintFrame.Size = UDim2.new(0, 280, 0, 32)
-hintFrame.Position = UDim2.new(1, -295, 0, 14)
+hintFrame.Size = UDim2.new(0, 320, 0, 36)
+hintFrame.Position = UDim2.new(1, -335, 0, 14)
 hintFrame.BackgroundColor3 = Color3.fromRGB(12, 5, 22)
 hintFrame.BackgroundTransparency = 0.12
 hintFrame.BorderSizePixel = 0
@@ -493,9 +493,9 @@ addCorner(hintBar, 2)
 local hintLabel = makeLabel(hintFrame, {
     Size = UDim2.new(1, -20, 1, 0),
     Position = UDim2.new(0, 14, 0, 0),
-    TextSize = 12,
+    TextSize = 14,
     TextColor3 = ct().accentDim,
-    Text = utf8.char(0x1F480) .. ' Press <font color="#d8a0ff">[</font> to summon <font color="#d8a0ff">SPOOKALICIOUS</font> ' .. utf8.char(0x1F480),
+    Text = utf8.char(0x1F480) .. ' Press <font color="#d8a0ff">LEFT ALT</font> to summon <font color="#d8a0ff">SPOOKALICIOUS</font> ' .. utf8.char(0x1F480),
     ZIndex = 72,
 })
 addStroke(hintLabel, Color3.fromRGB(50, 18, 90), 1, 0.35, Enum.ApplyStrokeMode.Contextual)
@@ -515,7 +515,7 @@ end)
 ------------------------------------------------------------------------
 --  MAIN PANEL
 ------------------------------------------------------------------------
-local MENU_W = 340
+local MENU_W = 360
 local MENU_MIN_W, MENU_MAX_W = 280, 520
 
 local mainFrame = Instance.new("Frame")
@@ -608,9 +608,9 @@ local titleRegion = makeFrame(mainFrame, {
 
 local titleLabel = makeLabel(titleRegion, {
     Name = "Title",
-    Size = UDim2.new(1, 0, 0, 28),
-    Position = UDim2.new(0, 0, 0, 2),
-    TextSize = 20,
+    Size = UDim2.new(1, 0, 0, 32),
+    Position = UDim2.new(0, 0, 0, 0),
+    TextSize = 24,
     TextColor3 = ct().accent,
     Text = utf8.char(0x1F480) .. " SPOOKALICIOUS " .. utf8.char(0x1F480),
     ZIndex = 22,
@@ -619,19 +619,19 @@ local titleTextStroke = addStroke(titleLabel, ct().glow, 1.5, 0.3, Enum.ApplyStr
 
 -- Glitch clones
 local glitchRed = makeLabel(titleRegion, {
-    Name = "GR", Size = UDim2.new(1,0,0,28), Position = UDim2.new(0,0,0,2),
-    TextSize = 20, TextColor3 = Color3.fromRGB(255,30,80),
+    Name = "GR", Size = UDim2.new(1,0,0,32), Position = UDim2.new(0,0,0,0),
+    TextSize = 24, TextColor3 = Color3.fromRGB(255,30,80),
     Text = utf8.char(0x1F480) .. " SPOOKALICIOUS " .. utf8.char(0x1F480), TextTransparency = 1, ZIndex = 21,
 })
 local glitchGreen = makeLabel(titleRegion, {
-    Name = "GG", Size = UDim2.new(1,0,0,28), Position = UDim2.new(0,0,0,2),
-    TextSize = 20, TextColor3 = Color3.fromRGB(60,255,140),
+    Name = "GG", Size = UDim2.new(1,0,0,32), Position = UDim2.new(0,0,0,0),
+    TextSize = 24, TextColor3 = Color3.fromRGB(60,255,140),
     Text = utf8.char(0x1F480) .. " SPOOKALICIOUS " .. utf8.char(0x1F480), TextTransparency = 1, ZIndex = 21,
 })
 
 local versionLabel = makeLabel(titleRegion, {
-    Size = UDim2.new(1,0,0,14), Position = UDim2.new(0,0,0,30),
-    TextSize = 12, TextColor3 = ct().accentDim, Text = "V4", ZIndex = 22,
+    Size = UDim2.new(1,0,0,16), Position = UDim2.new(0,0,0,32),
+    TextSize = 14, TextColor3 = ct().accentDim, Text = "V4", ZIndex = 22,
 })
 addStroke(versionLabel, ct().border, 0.8, 0.55, Enum.ApplyStrokeMode.Contextual)
 
@@ -668,7 +668,7 @@ addCorner(subtitleBanner, 3)
 
 local subtitleLabel = makeLabel(subtitleBanner, {
     Size = UDim2.new(1, 0, 1, 0),
-    TextSize = 11,
+    TextSize = 13,
     TextColor3 = ct().subtitleTxt,
     Text = utf8.char(0x1F383) .. " MAIN MENU " .. utf8.char(0x1F383),
     ZIndex = 21,
@@ -731,7 +731,7 @@ addGradient(botSep, NumberSequence.new({
 local footerLabel = makeLabel(mainFrame, {
     Name = "Footer",
     Size = UDim2.new(1, -12, 0, 28),
-    TextSize = 9,
+    TextSize = 11,
     TextColor3 = Color3.fromRGB(100, 70, 140),
     ZIndex = 22,
 })
@@ -830,13 +830,13 @@ end
 ------------------------------------------------------------------------
 --  ELEMENT HEIGHT CONSTANTS
 ------------------------------------------------------------------------
-local H_ITEM    = 32
-local H_SLIDER  = 52
-local H_TEXTBOX = 40
-local H_DROP    = 34
-local H_KEYBIND = 34
-local H_SECTION = 22
-local H_PAGE    = 32
+local H_ITEM    = 36
+local H_SLIDER  = 56
+local H_TEXTBOX = 44
+local H_DROP    = 38
+local H_KEYBIND = 38
+local H_SECTION = 24
+local H_PAGE    = 36
 
 ------------------------------------------------------------------------
 --  ITEM RENDERING
@@ -880,17 +880,30 @@ local function createItemUI(index, item, yPos)
     })
     addCorner(frame, 3)
 
-    -- Selection bars
+    -- Selection highlight + animated bars
     if sel then
+        -- Animate background highlight in
+        frame.BackgroundTransparency = 1
+        quickTween(frame, 0.25, { BackgroundTransparency = 0.87 })
+
         for _, side in ipairs({"left","right"}) do
             local bar = makeFrame(frame, {
-                Size = UDim2.new(0, 2, 0.55, 0),
-                Position = side == "left" and UDim2.new(0,2,0.225,0) or UDim2.new(1,-4,0.225,0),
+                Size = UDim2.new(0, 2, 0, 0),  -- start collapsed
+                Position = side == "left"
+                    and UDim2.new(0, 2, 0.5, 0)     -- start centered
+                    or UDim2.new(1, -4, 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
                 BackgroundColor3 = c.glow,
-                BackgroundTransparency = 0.05,
+                BackgroundTransparency = 0.6,
                 ZIndex = 26,
             })
             addCorner(bar, 1)
+
+            -- Animate bar expanding + fading in
+            quickTween(bar, 0.3, {
+                Size = UDim2.new(0, 2, 0.6, 0),
+                BackgroundTransparency = 0.05,
+            }, Enum.EasingStyle.Back)
         end
     end
 
@@ -913,7 +926,7 @@ local function createItemUI(index, item, yPos)
         makeLabel(frame, {
             Size = UDim2.new(0.6, 0, 1, 0),
             Position = UDim2.new(0.2, 0, 0, 0),
-            TextSize = 9,
+            TextSize = 12,
             TextColor3 = c.sectionColor,
             Text = string.upper(item.label),
             ZIndex = 27,
@@ -924,7 +937,7 @@ local function createItemUI(index, item, yPos)
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
             Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 13,
+            TextSize = 16,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = "[ " .. string.upper(item.label) .. "  > ]",
             ZIndex = 27,
@@ -940,7 +953,7 @@ local function createItemUI(index, item, yPos)
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
             Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 13,
+            TextSize = 16,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = string.format('[ <font color="%s">%s</font>  %s ]', clr, word, string.upper(item.label)),
             ZIndex = 27,
@@ -954,7 +967,7 @@ local function createItemUI(index, item, yPos)
 
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, 0, 0, 20),
-            TextSize = 12,
+            TextSize = 15,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = string.format('[ %s : <font color="#d8a0ff">%d</font> ]', string.upper(item.label), val),
             ZIndex = 27,
@@ -1068,7 +1081,7 @@ local function createItemUI(index, item, yPos)
             makeLabel(frame, {
                 Size = UDim2.new(1, 0, 0, 12),
                 Position = UDim2.new(0, 0, 0, 39),
-                TextSize = 8,
+                TextSize = 10,
                 TextColor3 = Color3.fromRGB(75, 50, 110),
                 Text = 'DRAG or <font color="#ffaa40">A</font> / <font color="#ffaa40">D</font>',
                 ZIndex = 27,
@@ -1080,7 +1093,7 @@ local function createItemUI(index, item, yPos)
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
             Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 13,
+            TextSize = 16,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = "[ " .. string.upper(item.label) .. " ]",
             ZIndex = 27,
@@ -1092,7 +1105,7 @@ local function createItemUI(index, item, yPos)
         makeLabel(frame, {
             Size = UDim2.new(1, 0, 0, 16),
             Position = UDim2.new(0, 0, 0, 1),
-            TextSize = 11,
+            TextSize = 14,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = string.upper(item.label),
             ZIndex = 27,
@@ -1113,7 +1126,7 @@ local function createItemUI(index, item, yPos)
         tb.Position = UDim2.new(0, 5, 0, 0)
         tb.BackgroundTransparency = 1
         tb.Font = Enum.Font.Code
-        tb.TextSize = 11
+        tb.TextSize = 14
         tb.TextColor3 = c.accent
         tb.PlaceholderText = item.placeholder or "Type here..."
         tb.PlaceholderColor3 = c.accentDim
@@ -1134,7 +1147,7 @@ local function createItemUI(index, item, yPos)
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 0, H_DROP),
             Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 12,
+            TextSize = 15,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = string.format('[ %s : <font color="#d8a0ff">%s</font> ]', string.upper(item.label), current),
             ZIndex = 27,
@@ -1156,7 +1169,7 @@ local function createItemUI(index, item, yPos)
                 local optLbl = makeLabel(optFrame, {
                     Size = UDim2.new(1, -10, 1, 0),
                     Position = UDim2.new(0, 5, 0, 0),
-                    TextSize = 10,
+                    TextSize = 13,
                     TextColor3 = optSel and c.accent or c.accentDim,
                     Text = opt,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -1187,7 +1200,7 @@ local function createItemUI(index, item, yPos)
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
             Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 12,
+            TextSize = 15,
             TextColor3 = sel and c.accent or c.accentDim,
             Text = string.format('[ %s : <font color="#ffaa40">%s</font> ]', string.upper(item.label), keyName),
             ZIndex = 27,
@@ -1288,7 +1301,7 @@ function renderView()
     -- Footer
     local bk = #State.stack > 0 and "BACK" or "CLOSE"
     footerLabel.Text = string.format(
-        '<font color="#50ff90">[</font> TOGGLE   '..
+        '<font color="#50ff90">ALT</font> TOGGLE   '..
         '<font color="#ffaa40">W/S</font> SCROLL   '..
         '<font color="#ffaa40">A/D</font> ADJUST   '..
         '<font color="#d8a0ff">F</font> SELECT   '..
@@ -1591,7 +1604,7 @@ end)
 
 -- [ key always active
 UIS.InputBegan:Connect(function(input, gp)
-    if input.KeyCode == Enum.KeyCode.LeftBracket and gui.Parent then
+    if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
         toggleMenu(not State.visible)
     end
 end)
@@ -1808,7 +1821,7 @@ function Library:CreateWindow(title, version)
     versionLabel.Text = State.version
 
     hintLabel.Text = string.format(
-        '%s Press <font color="#d8a0ff">[</font> to summon <font color="#d8a0ff">%s</font> %s',
+        '%s Press <font color="#d8a0ff">LEFT ALT</font> to summon <font color="#d8a0ff">%s</font> %s',
         skull, State.title, skull
     )
 
@@ -2016,6 +2029,6 @@ end
 ------------------------------------------------------------------------
 mainFrame.Visible = false
 hintFrame.Visible = true
-print("[SPOOKALICIOUS V4] Library loaded. Press [ to open.")
+print("[SPOOKALICIOUS V4] Library loaded. Press LEFT ALT to open.")
 
 return Library
