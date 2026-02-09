@@ -1522,7 +1522,7 @@ end
 local SINK = "SpookaliciousV4Sink"
 local BLOCKED = {
     Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D,
-    Enum.KeyCode.F, Enum.KeyCode.E, Enum.KeyCode.R, Enum.KeyCode.Q,
+    Enum.KeyCode.Space, Enum.KeyCode.E, Enum.KeyCode.R, Enum.KeyCode.Q,
     Enum.KeyCode.X, Enum.KeyCode.Z, Enum.KeyCode.C, Enum.KeyCode.V,
     Enum.KeyCode.G, Enum.KeyCode.T, Enum.KeyCode.B, Enum.KeyCode.Y,
     Enum.KeyCode.Space, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift,
@@ -1570,7 +1570,7 @@ function bindKeys()
                 doSliderAdjust(-1)
             elseif k == Enum.KeyCode.D or k == Enum.KeyCode.Right then
                 doSliderAdjust(1)
-            elseif k == Enum.KeyCode.F or k == Enum.KeyCode.Return then
+            elseif k == Enum.KeyCode.Space or k == Enum.KeyCode.Return then
                 doSelect()
             elseif k == Enum.KeyCode.X or k == Enum.KeyCode.Escape then
                 doGoBack()
