@@ -831,7 +831,7 @@ end
 --  ELEMENT HEIGHT CONSTANTS
 ------------------------------------------------------------------------
 local H_ITEM    = 32
-local H_SLIDER  = 48
+local H_SLIDER  = 52
 local H_TEXTBOX = 40
 local H_DROP    = 34
 local H_KEYBIND = 34
@@ -947,7 +947,7 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── SLIDER ──
+    -- ── SLIDER (mouse draggable + A/D) ──
     elseif item.type == "slider" then
         local val = item.value
         local pct = math.clamp((val - item.min) / (item.max - item.min), 0, 1)
@@ -961,14 +961,22 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.25 or 0.55, Enum.ApplyStrokeMode.Contextual)
 
-        local track = makeFrame(frame, {
-            Size = UDim2.new(1, -44, 0, 4),
-            Position = UDim2.new(0, 22, 0, 23),
+        -- Track (taller hit area)
+        local trackWrap = makeFrame(frame, {
+            Size = UDim2.new(1, -34, 0, 18),
+            Position = UDim2.new(0, 17, 0, 20),
+            BackgroundTransparency = 1,
+            ZIndex = 27,
+        })
+
+        local track = makeFrame(trackWrap, {
+            Size = UDim2.new(1, 0, 0, 6),
+            Position = UDim2.new(0, 0, 0.5, -3),
             BackgroundColor3 = c.sliderTrack,
             BackgroundTransparency = 0,
             ZIndex = 27,
         })
-        addCorner(track, 2)
+        addCorner(track, 3)
         addStroke(track, c.border, 1, 0.7)
 
         local fill = makeFrame(track, {
@@ -977,26 +985,92 @@ local function createItemUI(index, item, yPos)
             BackgroundTransparency = 0,
             ZIndex = 28,
         })
-        addCorner(fill, 2)
+        addCorner(fill, 3)
 
-        if sel and pct > 0.03 then
-            local dot = makeFrame(fill, {
-                Size = UDim2.new(0, 8, 0, 8),
-                Position = UDim2.new(1, -4, 0.5, -4),
-                BackgroundColor3 = c.glow,
-                BackgroundTransparency = 0.15,
-                ZIndex = 29,
-            })
-            addCorner(dot, 4)
+        -- Thumb dot
+        local thumbSize = sel and 14 or 10
+        local thumb = makeFrame(trackWrap, {
+            Size = UDim2.new(0, thumbSize, 0, thumbSize),
+            Position = UDim2.new(pct, -thumbSize/2, 0.5, -thumbSize/2),
+            BackgroundColor3 = sel and c.glow or c.sliderFill,
+            BackgroundTransparency = 0.05,
+            ZIndex = 30,
+        })
+        addCorner(thumb, thumbSize)
+        if sel then
+            addStroke(thumb, c.accent, 1, 0.3)
         end
 
+        -- Mouse drag handler
+        local dragBtn = Instance.new("TextButton")
+        dragBtn.Size = UDim2.new(1, 10, 1, 6)
+        dragBtn.Position = UDim2.new(0, -5, 0, -3)
+        dragBtn.BackgroundTransparency = 1
+        dragBtn.Text = ""
+        dragBtn.ZIndex = 33
+        dragBtn.Parent = trackWrap
+
+        local sliderDragging = false
+        local dragMoveConn, dragEndConn
+
+        local function updateSliderFromMouse(inputX)
+            local trackAbsPos = track.AbsolutePosition.X
+            local trackAbsSize = track.AbsoluteSize.X
+            if trackAbsSize < 1 then return end
+
+            local relX = math.clamp((inputX - trackAbsPos) / trackAbsSize, 0, 1)
+            local rawVal = item.min + relX * (item.max - item.min)
+
+            -- Snap to step
+            local step = item.step or 1
+            local snapped = math.floor((rawVal - item.min) / step + 0.5) * step + item.min
+            snapped = math.clamp(snapped, item.min, item.max)
+
+            if snapped ~= item.value then
+                item.value = snapped
+                playSound("slider")
+                if item.callback then item.callback(snapped) end
+
+                -- Update fill and thumb live without full re-render
+                local newPct = math.clamp((snapped - item.min) / (item.max - item.min), 0, 1)
+                fill.Size = UDim2.new(newPct, 0, 1, 0)
+                thumb.Position = UDim2.new(newPct, -thumbSize/2, 0.5, -thumbSize/2)
+                lbl.Text = string.format('[ %s : <font color="#d8a0ff">%d</font> ]', string.upper(item.label), snapped)
+            end
+        end
+
+        dragBtn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliderDragging = true
+                State.sel = index
+                updateSliderFromMouse(input.Position.X)
+
+                dragMoveConn = UIS.InputChanged:Connect(function(moveInput)
+                    if sliderDragging and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
+                        updateSliderFromMouse(moveInput.Position.X)
+                    end
+                end)
+
+                dragEndConn = UIS.InputEnded:Connect(function(endInput)
+                    if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+                        sliderDragging = false
+                        if dragMoveConn then dragMoveConn:Disconnect(); dragMoveConn = nil end
+                        if dragEndConn then dragEndConn:Disconnect(); dragEndConn = nil end
+                        showToast(item.label .. ": " .. item.value)
+                        renderView()
+                    end
+                end)
+            end
+        end)
+
+        -- A/D hint
         if sel then
             makeLabel(frame, {
-                Size = UDim2.new(1, 0, 0, 14),
-                Position = UDim2.new(0, 0, 0, 31),
+                Size = UDim2.new(1, 0, 0, 12),
+                Position = UDim2.new(0, 0, 0, 39),
                 TextSize = 8,
                 TextColor3 = Color3.fromRGB(75, 50, 110),
-                Text = '<font color="#ffaa40">A</font> ----  <font color="#ffaa40">D</font> ---->',
+                Text = 'DRAG or <font color="#ffaa40">A</font> / <font color="#ffaa40">D</font>',
                 ZIndex = 27,
             })
         end
