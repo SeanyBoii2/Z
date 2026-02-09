@@ -1304,7 +1304,7 @@ function renderView()
         '<font color="#50ff90">ALT</font> TOGGLE   '..
         '<font color="#ffaa40">W/S</font> SCROLL   '..
         '<font color="#ffaa40">A/D</font> ADJUST   '..
-        '<font color="#d8a0ff">F</font> SELECT   '..
+        '<font color="#d8a0ff">SPACE</font> SELECT   '..
         '<font color="#ff4070">X</font> %s', bk
     )
 
