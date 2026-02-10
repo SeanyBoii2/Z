@@ -382,6 +382,15 @@ end)
 
 ServerSection:CreateButton("Rejoin Server", function()
     Window:Notify("Rejoining...")
+    
+    -- Queue the script to run again after rejoining
+    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
+    if syn and syn.queue_on_teleport then
+        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    elseif queue_on_teleport then
+        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    end
+    
     task.wait(0.5)
     pcall(function()
         game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
