@@ -171,7 +171,6 @@ local THEMES = {
     },
     {
         name = "RAINBOW",
-        -- These are placeholder values; ct() generates dynamic colors when this theme is active
         border = Color3.fromRGB(255, 80, 80),
         glow = Color3.fromRGB(255, 100, 100),
         accent = Color3.fromRGB(255, 220, 220),
@@ -205,7 +204,7 @@ local State = {
     opacity = 80,
 
     -- Navigation
-    currentView = "home",    -- "home" or page id
+    currentView = "home",
     sel = 1,
     stack = {},
 
@@ -221,7 +220,7 @@ local State = {
     version = "V4",
 }
 
-local rainbowHue = 0 -- Updated in Heartbeat
+local rainbowHue = 0
 
 local function hsvToRgb(h, s, v)
     return Color3.fromHSV(h % 1, s, v)
@@ -231,7 +230,6 @@ local function ct()
     local base = THEMES[State.colorIdx]
     if base.name ~= "RAINBOW" then return base end
 
-    -- Generate dynamic rainbow theme from current hue
     local h = rainbowHue
     local border   = hsvToRgb(h, 0.7, 0.85)
     local glow     = hsvToRgb(h, 0.6, 1.0)
@@ -390,7 +388,6 @@ local function repositionToasts()
 end
 
 local function showToast(msg)
-    -- Remove oldest if at max
     if #activeToasts >= MAX_TOASTS then
         local oldest = table.remove(activeToasts, 1)
         if oldest and oldest.frame then
@@ -405,7 +402,7 @@ local function showToast(msg)
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 0, TOAST_H)
-    frame.Position = UDim2.new(1, 30, 1, 0) -- start offscreen
+    frame.Position = UDim2.new(1, 30, 1, 0)
     frame.BackgroundColor3 = c.bg
     frame.BackgroundTransparency = 0.06
     frame.BorderSizePixel = 0
@@ -415,7 +412,6 @@ local function showToast(msg)
     addCorner(frame, 4)
     addStroke(frame, c.border, 1, 0.35)
 
-    -- Left accent
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(0, 3, 0.65, 0)
     bar.Position = UDim2.new(0, 3, 0.175, 0)
@@ -441,20 +437,16 @@ local function showToast(msg)
     table.insert(activeToasts, entry)
     repositionToasts()
 
-    -- Slide in
     quickTween(frame, 0.25, {
         Position = UDim2.new(0, 0, 1, -(#activeToasts * (TOAST_H + TOAST_GAP)) - 10)
     }, Enum.EasingStyle.Back)
 
-    -- Auto remove
     task.delay(TOAST_DURATION, function()
-        -- Fade out
         quickTween(frame, 0.2, { BackgroundTransparency = 1 })
         quickTween(lbl, 0.2, { TextTransparency = 1 })
         quickTween(bar, 0.2, { BackgroundTransparency = 1 })
 
         task.delay(0.25, function()
-            -- Find and remove from list
             for i, t in ipairs(activeToasts) do
                 if t == entry then
                     table.remove(activeToasts, i)
@@ -501,7 +493,6 @@ local hintLabel = makeLabel(hintFrame, {
 })
 addStroke(hintLabel, Color3.fromRGB(50, 18, 90), 1, 0.35, Enum.ApplyStrokeMode.Contextual)
 
--- Pulse
 task.spawn(function()
     while true do
         if hintFrame.Visible then
@@ -518,6 +509,7 @@ end)
 ------------------------------------------------------------------------
 local MENU_W = 360
 local MENU_MIN_W, MENU_MAX_W = 280, 520
+local MENU_MAX_H = 520  -- Maximum panel height to prevent going off screen
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "Panel"
@@ -534,7 +526,6 @@ addCorner(mainFrame, 6)
 
 local outerStroke = addStroke(mainFrame, ct().border, 2, 0.1)
 
--- Inner border
 local innerBorder = makeFrame(mainFrame, {
     Size = UDim2.new(1, -12, 1, -12),
     Position = UDim2.new(0, 6, 0, 6),
@@ -544,7 +535,6 @@ local innerBorder = makeFrame(mainFrame, {
 local innerStroke = addStroke(innerBorder, ct().border, 1, 0.72)
 addCorner(innerBorder, 4)
 
--- Top glare
 local topGlare = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 0, 100),
     BackgroundColor3 = ct().glow,
@@ -556,7 +546,6 @@ addGradient(topGlare, NumberSequence.new({
     NumberSequenceKeypoint.new(1, 1),
 }), 90)
 
--- Bottom vignette
 local botVig = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 0, 60),
     Position = UDim2.new(0, 0, 1, -60),
@@ -569,7 +558,6 @@ addGradient(botVig, NumberSequence.new({
     NumberSequenceKeypoint.new(1, 0),
 }), 90)
 
--- Fog blobs
 local fogA = makeFrame(mainFrame, {
     Size = UDim2.new(0.6, 0, 0.6, 0),
     Position = UDim2.new(0.1, 0, 0.1, 0),
@@ -588,7 +576,6 @@ local fogB = makeFrame(mainFrame, {
 })
 addCorner(fogB, 80)
 
--- Scanlines
 local scanlineOverlay = makeFrame(mainFrame, {
     Name = "Scanlines",
     Size = UDim2.new(1, 0, 1, 0),
@@ -618,7 +605,6 @@ local titleLabel = makeLabel(titleRegion, {
 })
 local titleTextStroke = addStroke(titleLabel, ct().glow, 1.5, 0.3, Enum.ApplyStrokeMode.Contextual)
 
--- Glitch clones
 local glitchRed = makeLabel(titleRegion, {
     Name = "GR", Size = UDim2.new(1,0,0,32), Position = UDim2.new(0,0,0,0),
     TextSize = 24, TextColor3 = Color3.fromRGB(255,30,80),
@@ -636,7 +622,6 @@ local versionLabel = makeLabel(titleRegion, {
 })
 addStroke(versionLabel, ct().border, 0.8, 0.55, Enum.ApplyStrokeMode.Contextual)
 
--- Title underline
 local titleLine = makeFrame(titleRegion, {
     Size = UDim2.new(0.4, 0, 0, 1),
     Position = UDim2.new(0.3, 0, 0, 46),
@@ -645,7 +630,6 @@ local titleLine = makeFrame(titleRegion, {
     ZIndex = 22,
 })
 
--- Drag button on title
 local dragBtn = Instance.new("TextButton")
 dragBtn.Size = UDim2.new(1, 0, 1, 0)
 dragBtn.BackgroundTransparency = 1
@@ -679,7 +663,6 @@ local subtitleLabel = makeLabel(subtitleBanner, {
 })
 addStroke(subtitleLabel, ct().bg, 1, 0.3, Enum.ApplyStrokeMode.Contextual)
 
--- Top separator
 local topSep = makeFrame(mainFrame, {
     Size = UDim2.new(1, -28, 0, 1),
     Position = UDim2.new(0, 14, 0, subY + 30),
@@ -734,6 +717,9 @@ local footerLabel = makeLabel(mainFrame, {
     Size = UDim2.new(1, -12, 0, 28),
     TextSize = 11,
     TextColor3 = Color3.fromRGB(100, 70, 140),
+    TextScaled = false,
+    TextWrapped = false,
+    ClipsDescendants = false,
     ZIndex = 22,
 })
 addStroke(footerLabel, Color3.fromRGB(35, 12, 60), 0.7, 0.5, Enum.ApplyStrokeMode.Contextual)
@@ -753,7 +739,6 @@ resizeHandle.Parent = mainFrame
 addCorner(resizeHandle, 4)
 local resizeStroke = addStroke(resizeHandle, ct().border, 1, 0.45)
 
--- Diagonal grip lines
 local resizeIcon = makeLabel(resizeHandle, {
     Size = UDim2.new(1, 0, 1, 0),
     Text = "///",
@@ -765,7 +750,6 @@ local resizeIcon = makeLabel(resizeHandle, {
 })
 addStroke(resizeIcon, ct().bg, 0.6, 0.5, Enum.ApplyStrokeMode.Contextual)
 
--- Hover glow
 resizeHandle.MouseEnter:Connect(function()
     quickTween(resizeHandle, 0.15, { BackgroundTransparency = 0.1 })
     quickTween(resizeStroke, 0.15, { Transparency = 0.15 })
@@ -881,17 +865,15 @@ local function createItemUI(index, item, yPos)
     })
     addCorner(frame, 3)
 
-    -- Selection highlight + animated bars
     if sel then
-        -- Animate background highlight in
         frame.BackgroundTransparency = 1
         quickTween(frame, 0.25, { BackgroundTransparency = 0.87 })
 
         for _, side in ipairs({"left","right"}) do
             local bar = makeFrame(frame, {
-                Size = UDim2.new(0, 2, 0, 0),  -- start collapsed
+                Size = UDim2.new(0, 2, 0, 0),
                 Position = side == "left"
-                    and UDim2.new(0, 2, 0.5, 0)     -- start centered
+                    and UDim2.new(0, 2, 0.5, 0)
                     or UDim2.new(1, -4, 0.5, 0),
                 AnchorPoint = Vector2.new(0, 0.5),
                 BackgroundColor3 = c.glow,
@@ -900,7 +882,6 @@ local function createItemUI(index, item, yPos)
             })
             addCorner(bar, 1)
 
-            -- Animate bar expanding + fading in
             quickTween(bar, 0.3, {
                 Size = UDim2.new(0, 2, 0.6, 0),
                 BackgroundTransparency = 0.05,
@@ -908,7 +889,7 @@ local function createItemUI(index, item, yPos)
         end
     end
 
-    -- ── SECTION HEADER ──
+    -- SECTION HEADER
     if item.type == "section_header" then
         local sep1 = makeFrame(frame, {
             Size = UDim2.new(0.2, 0, 0, 1),
@@ -933,7 +914,7 @@ local function createItemUI(index, item, yPos)
             ZIndex = 27,
         })
 
-    -- ── PAGE LINK ──
+    -- PAGE LINK
     elseif item.type == "page_link" then
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
@@ -945,7 +926,7 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── TOGGLE ──
+    -- TOGGLE
     elseif item.type == "toggle" then
         local on = item.value
         local clr = on and string.format("#%02x%02x%02x", c.onColor.R*255, c.onColor.G*255, c.onColor.B*255)
@@ -961,7 +942,7 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── SLIDER (mouse draggable + A/D) ──
+    -- SLIDER
     elseif item.type == "slider" then
         local val = item.value
         local pct = math.clamp((val - item.min) / (item.max - item.min), 0, 1)
@@ -975,7 +956,6 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.25 or 0.55, Enum.ApplyStrokeMode.Contextual)
 
-        -- Track (taller hit area)
         local trackWrap = makeFrame(frame, {
             Size = UDim2.new(1, -34, 0, 18),
             Position = UDim2.new(0, 17, 0, 20),
@@ -1001,7 +981,6 @@ local function createItemUI(index, item, yPos)
         })
         addCorner(fill, 3)
 
-        -- Thumb dot
         local thumbSize = sel and 14 or 10
         local thumb = makeFrame(trackWrap, {
             Size = UDim2.new(0, thumbSize, 0, thumbSize),
@@ -1015,7 +994,6 @@ local function createItemUI(index, item, yPos)
             addStroke(thumb, c.accent, 1, 0.3)
         end
 
-        -- Mouse drag handler
         local dragBtn = Instance.new("TextButton")
         dragBtn.Size = UDim2.new(1, 10, 1, 6)
         dragBtn.Position = UDim2.new(0, -5, 0, -3)
@@ -1035,7 +1013,6 @@ local function createItemUI(index, item, yPos)
             local relX = math.clamp((inputX - trackAbsPos) / trackAbsSize, 0, 1)
             local rawVal = item.min + relX * (item.max - item.min)
 
-            -- Snap to step
             local step = item.step or 1
             local snapped = math.floor((rawVal - item.min) / step + 0.5) * step + item.min
             snapped = math.clamp(snapped, item.min, item.max)
@@ -1045,7 +1022,6 @@ local function createItemUI(index, item, yPos)
                 playSound("slider")
                 if item.callback then item.callback(snapped) end
 
-                -- Update fill and thumb live without full re-render
                 local newPct = math.clamp((snapped - item.min) / (item.max - item.min), 0, 1)
                 fill.Size = UDim2.new(newPct, 0, 1, 0)
                 thumb.Position = UDim2.new(newPct, -thumbSize/2, 0.5, -thumbSize/2)
@@ -1077,7 +1053,6 @@ local function createItemUI(index, item, yPos)
             end
         end)
 
-        -- A/D hint
         if sel then
             makeLabel(frame, {
                 Size = UDim2.new(1, 0, 0, 12),
@@ -1089,7 +1064,7 @@ local function createItemUI(index, item, yPos)
             })
         end
 
-    -- ── BUTTON ──
+    -- BUTTON
     elseif item.type == "button" then
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
@@ -1101,7 +1076,7 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── TEXTBOX ──
+    -- TEXTBOX
     elseif item.type == "textbox" then
         makeLabel(frame, {
             Size = UDim2.new(1, 0, 0, 16),
@@ -1141,7 +1116,7 @@ local function createItemUI(index, item, yPos)
             if item.callback then item.callback(tb.Text) end
         end)
 
-    -- ── DROPDOWN ──
+    -- DROPDOWN
     elseif item.type == "dropdown" then
         local current = item.value or item.default or "None"
 
@@ -1193,7 +1168,7 @@ local function createItemUI(index, item, yPos)
             end
         end
 
-    -- ── KEYBIND ──
+    -- KEYBIND
     elseif item.type == "keybind" then
         local keyName = item.value and item.value.Name or "None"
         if item._listening then keyName = "..." end
@@ -1239,7 +1214,6 @@ local function buildFlatItems()
     State.flatItems = {}
 
     if State.currentView == "home" then
-        -- Show page links + settings
         for _, pageId in ipairs(State.pageOrder) do
             local pg = State.pages[pageId]
             table.insert(State.flatItems, {
@@ -1248,14 +1222,12 @@ local function buildFlatItems()
                 pageId = pageId,
             })
         end
-        -- Built-in settings as a page link
         table.insert(State.flatItems, {
             type = "page_link",
             label = "Settings",
             pageId = "__settings__",
         })
     elseif State.currentView == "__settings__" then
-        -- Show settings page
         table.insert(State.flatItems, { type = "section_header", label = "Menu Settings" })
         table.insert(State.flatItems, { type = "button", label = "Menu Color", callback = function()
             State.colorIdx = (State.colorIdx % #THEMES) + 1
@@ -1267,7 +1239,6 @@ local function buildFlatItems()
         table.insert(State.flatItems, { type = "toggle", label = "Scanlines", value = State.scanlines, callback = function(v) State.scanlines = v end })
         table.insert(State.flatItems, { type = "toggle", label = "Glitch Title", value = State.glitchTitle, callback = function(v) State.glitchTitle = v end })
     else
-        -- Show page contents
         local pg = State.pages[State.currentView]
         if pg then
             for _, sec in ipairs(pg.sections) do
@@ -1281,7 +1252,7 @@ local function buildFlatItems()
 end
 
 ------------------------------------------------------------------------
---  RENDER VIEW
+--  RENDER VIEW (FIXED: height capping + re-centering + footer)
 ------------------------------------------------------------------------
 function renderView()
     clearItems()
@@ -1292,7 +1263,6 @@ function renderView()
 
     State.sel = math.clamp(State.sel, 1, #items)
 
-    -- Skip section headers
     while items[State.sel] and items[State.sel].type == "section_header" do
         State.sel = State.sel + 1
         if State.sel > #items then State.sel = 1 end
@@ -1310,14 +1280,14 @@ function renderView()
         subtitleLabel.Text = pg and (utf8.char(0x1F383) .. " " .. string.upper(pg.name) .. " " .. utf8.char(0x1F383)) or "---"
     end
 
-    -- Footer
+    -- Footer — compact version that fits in the panel width
     local bk = #State.stack > 0 and "BACK" or "CLOSE"
     footerLabel.Text = string.format(
-        '<font color="#50ff90">ALT</font> TOGGLE   '..
-        '<font color="#ffaa40">W/S</font> SCROLL   '..
-        '<font color="#ffaa40">A/D</font> ADJUST   '..
-        '<font color="#d8a0ff">F/SPACE</font> SELECT   '..
-        '<font color="#ff4070">X</font> %s', bk
+        '<font color="#50ff90">ALT</font>Menu '..
+        '<font color="#ffaa40">W/S</font>Nav '..
+        '<font color="#ffaa40">A/D</font>Adj '..
+        '<font color="#d8a0ff">F</font>Select '..
+        '<font color="#ff4070">X</font>%s', bk
     )
 
     -- Render items
@@ -1330,7 +1300,7 @@ function renderView()
 
     itemsFrame.CanvasSize = UDim2.new(0, 0, 0, totalH)
 
-    -- Auto-scroll
+    -- Auto-scroll to selected
     local selY = 0
     for i = 1, State.sel - 1 do selY = selY + getItemHeight(items[i]) end
     local viewH = itemsFrame.AbsoluteSize.Y
@@ -1340,11 +1310,38 @@ function renderView()
         itemsFrame.CanvasPosition = Vector2.new(0, selY + H_ITEM - viewH)
     end
 
-    -- Resize frame
-    local itemsH = math.min(totalH, 340)
+    -- Calculate panel height: cap items area so panel doesn't exceed MENU_MAX_H
+    local headerH = itemsY  -- space above items (title + subtitle + sep)
+    local footerH = 8 + 32 + 12  -- bottom sep + footer + padding
+    local maxItemsH = MENU_MAX_H - headerH - footerH
+    local itemsH = math.min(totalH, maxItemsH)
+
     itemsFrame.Size = UDim2.new(1, -8, 0, itemsH)
-    local totalFrameH = itemsY + itemsH + 8 + 32 + 12
-    mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, totalFrameH)
+
+    local totalFrameH = headerH + itemsH + footerH
+    local newSize = UDim2.new(0, mainFrame.Size.X.Offset, 0, totalFrameH)
+
+    -- Re-center panel vertically when height changes (unless user dragged it)
+    local oldH = mainFrame.Size.Y.Offset
+    mainFrame.Size = newSize
+
+    if not State._userDragged and math.abs(totalFrameH - oldH) > 2 then
+        -- Keep panel anchored from center of screen
+        local screenH = gui.AbsoluteSize.Y
+        local targetY = math.clamp((screenH - totalFrameH) / 2, 10, screenH - totalFrameH - 10)
+        mainFrame.Position = UDim2.new(mainFrame.Position.X.Scale, mainFrame.Position.X.Offset, 0, targetY)
+    else
+        -- Clamp to screen bounds even if user dragged
+        local screenH = gui.AbsoluteSize.Y
+        local currentY = mainFrame.Position.Y.Offset
+        if mainFrame.Position.Y.Scale > 0 then
+            currentY = currentY + mainFrame.Position.Y.Scale * screenH
+        end
+        local clampedY = math.clamp(currentY, 10, math.max(10, screenH - totalFrameH - 10))
+        if math.abs(clampedY - currentY) > 2 then
+            mainFrame.Position = UDim2.new(mainFrame.Position.X.Scale, mainFrame.Position.X.Offset, 0, clampedY)
+        end
+    end
 
     botSep.Position = UDim2.new(0, 14, 0, itemsY + itemsH + 4)
     footerLabel.Position = UDim2.new(0, 6, 0, itemsY + itemsH + 8)
@@ -1413,7 +1410,6 @@ function doSelect()
         showToast("Press any key...")
         renderView()
 
-        -- Wait for next key press
         local conn
         conn = UIS.InputBegan:Connect(function(input, gp)
             if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1461,7 +1457,6 @@ function doSliderAdjust(dir)
             renderView()
         end
     elseif item.type == "dropdown" and not item._expanded then
-        -- Cycle through dropdown with A/D
         playSound("nav")
         local idx = 1
         for i, v in ipairs(item.list) do
@@ -1491,20 +1486,27 @@ function toggleMenu(show)
         mainFrame.Visible = true
         hintFrame.Visible = false
 
-        -- Calculate proper right-side position
         local menuW = mainFrame.Size.X.Offset
         local menuH = mainFrame.Size.Y.Offset
         local screenW = gui.AbsoluteSize.X
+        local screenH = gui.AbsoluteSize.Y
 
-        -- If menu was dragged somewhere, keep that position; otherwise default to right side
         local targetPos
         if State._userDragged then
             targetPos = State._lastPos
+            -- Clamp dragged position to screen
+            local tY = targetPos.Y.Offset
+            if targetPos.Y.Scale > 0 then
+                tY = tY + targetPos.Y.Scale * screenH
+            end
+            tY = math.clamp(tY, 10, math.max(10, screenH - menuH - 10))
+            targetPos = UDim2.new(targetPos.X.Scale, targetPos.X.Offset, 0, tY)
         else
-            targetPos = UDim2.new(1, -menuW - 16, 0.5, -menuH / 2)
+            -- Center vertically, anchor to right side
+            local centerY = math.clamp((screenH - menuH) / 2, 10, math.max(10, screenH - menuH - 10))
+            targetPos = UDim2.new(1, -menuW - 16, 0, centerY)
         end
 
-        -- Start offscreen right, slide in
         mainFrame.Position = UDim2.new(1, 20, targetPos.Y.Scale, targetPos.Y.Offset)
 
         tween(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
@@ -1563,7 +1565,6 @@ function bindKeys()
                 playSound("nav")
                 State.sel = State.sel - 1
                 if State.sel < 1 then State.sel = count end
-                -- Skip section headers
                 while items[State.sel] and items[State.sel].type == "section_header" do
                     State.sel = State.sel - 1
                     if State.sel < 1 then State.sel = count end
@@ -1599,7 +1600,6 @@ function unbindKeys()
     heldKeys = {}
 end
 
--- Held key repeat for sliders
 task.spawn(function()
     while true do
         task.wait(REPEAT_RATE)
@@ -1614,7 +1614,6 @@ task.spawn(function()
     end
 end)
 
--- [ key always active
 UIS.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
         toggleMenu(not State.visible)
@@ -1628,12 +1627,11 @@ local phase = 0
 
 RS.Heartbeat:Connect(function(dt)
     phase = phase + dt
-    rainbowHue = (rainbowHue + dt * 0.08) % 1 -- Slow smooth cycle
+    rainbowHue = (rainbowHue + dt * 0.08) % 1
 
     if not State.visible then return end
     local c = ct()
 
-    -- Rainbow: update colors every frame
     if THEMES[State.colorIdx].name == "RAINBOW" then
         outerStroke.Color = c.border
         innerStroke.Color = c.border
@@ -1652,23 +1650,13 @@ RS.Heartbeat:Connect(function(dt)
         resizeIcon.TextColor3 = c.glow
     end
 
-    -- Border glow
     outerStroke.Transparency = 0.08 + math.sin(phase * 2.5) * 0.1
-
-    -- Title stroke pulse
     titleTextStroke.Transparency = 0.25 + math.sin(phase * 1.8) * 0.12
-
-    -- Top glare shimmer
     topGlare.BackgroundTransparency = 0.92 + math.sin(phase * 1.1) * 0.015
-
-    -- Fog drift
     fogA.Position = UDim2.new(0.1 + math.sin(phase * 0.4) * 0.05, 0, 0.1 + math.cos(phase * 0.3) * 0.03, 0)
     fogB.Position = UDim2.new(0.4 - math.sin(phase * 0.4) * 0.05, 0, 0.5 - math.cos(phase * 0.3) * 0.03, 0)
-
-    -- Inner border pulse
     innerStroke.Transparency = 0.68 + math.sin(phase * 3) * 0.05
 
-    -- Chromatic glitch
     if State.glitchTitle then
         if math.random() < 0.012 then
             local ox = (math.random() - 0.5) * 6
@@ -1684,7 +1672,6 @@ RS.Heartbeat:Connect(function(dt)
             end)
         end
 
-        -- Occasional heavy glitch burst
         if math.random() < 0.002 then
             for _ = 1, 3 do
                 local ox = (math.random() - 0.5) * 10
@@ -1700,7 +1687,6 @@ RS.Heartbeat:Connect(function(dt)
     end
 end)
 
--- Rainbow: periodically refresh items to update their colors
 task.spawn(function()
     while true do
         task.wait(0.4)
@@ -1717,7 +1703,6 @@ local particleFolder = Instance.new("Folder")
 particleFolder.Name = "Particles"
 particleFolder.Parent = gui
 
--- Bottom particles (floating up)
 task.spawn(function()
     while true do
         task.wait(0.15 + math.random() * 0.25)
@@ -1751,7 +1736,6 @@ task.spawn(function()
     end
 end)
 
--- Side particles
 task.spawn(function()
     while true do
         task.wait(0.3 + math.random() * 0.5)
@@ -1787,7 +1771,6 @@ task.spawn(function()
     end
 end)
 
--- Internal ambient particles (inside the menu)
 task.spawn(function()
     while true do
         task.wait(0.4 + math.random() * 0.6)
@@ -1872,7 +1855,6 @@ function Library:CreateWindow(title, version)
                 }
                 table.insert(sec.elements, el)
 
-                -- Return controller
                 return {
                     Set = function(_, val)
                         el.value = val
@@ -1988,7 +1970,6 @@ function Library:CreateWindow(title, version)
                 }
                 table.insert(sec.elements, el)
 
-                -- Keybind listener
                 UIS.InputBegan:Connect(function(input, gp)
                     if gp then return end
                     if not State.visible and el.value and input.KeyCode == el.value then
