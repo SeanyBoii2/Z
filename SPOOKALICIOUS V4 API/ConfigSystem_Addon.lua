@@ -1,29 +1,11 @@
 --[[
     =================================================================
-    SPOOKALICIOUS V4 - CONFIG SYSTEM ADDON
+    SPOOKALICIOUS V4 - CONFIG SYSTEM ADDON (FIXED)
     =================================================================
     
-    Add this to your existing SpookaliciousV4 to enable:
-    - Save/Load configurations
-    - Multiple profiles  
-    - Auto-save
-    - Export/Import
-    
     USAGE:
-    Add to your Window creation:
-    
-    local Window = Library:CreateWindow("My Menu", "v1.0")
-    
-    -- Load the config system
-    loadstring(game:HttpGet("CONFIG_SYSTEM_URL"))()
+    local ConfigSystem = loadstring(game:HttpGet("URL"))()
     ConfigSystem:Attach(Window)
-    
-    -- Now you can:
-    Window:SaveConfig("ProfileName")
-    Window:LoadConfig("ProfileName")
-    Window:GetProfiles()
-    Window:DeleteProfile("ProfileName")
-    Window:SetAutoSave(true)
 --]]
 
 local HttpService = game:GetService("HttpService")
@@ -39,14 +21,12 @@ function ConfigSystem.new()
     self.autoSave = false
     self.fileName = "SpookaliciousV4_Configs.json"
     self.window = nil
-    self.state = nil
     
     return self
 end
 
 function ConfigSystem:Attach(window)
     self.window = window
-    self.state = window._state -- Assuming window stores its state here
     
     -- Load existing configs from file
     self:LoadFromFile()
@@ -83,11 +63,14 @@ function ConfigSystem:Attach(window)
         return self:ImportConfig(data, profileName)
     end
     
-    print("[CONFIG SYSTEM] Attached to window. Profiles:", #self:GetProfiles())
+    print("[CONFIG SYSTEM] Attached successfully. Profiles:", #self:GetProfiles())
 end
 
 function ConfigSystem:SaveConfig(profileName)
     profileName = profileName or self.currentProfile
+    
+    -- Access the global State variable that the library uses
+    local State = _G.State or {}
     
     local configData = {
         version = "4.0",
@@ -97,19 +80,21 @@ function ConfigSystem:SaveConfig(profileName)
     }
     
     -- Save all element values from all pages
-    for pageId, page in pairs(self.state.pages) do
-        configData.elements[pageId] = {}
-        
-        for sectionIdx, section in ipairs(page.sections) do
-            configData.elements[pageId][sectionIdx] = {}
+    if State.pages then
+        for pageId, page in pairs(State.pages) do
+            configData.elements[pageId] = {}
             
-            for elementIdx, element in ipairs(section.elements) do
-                if element.value ~= nil then
-                    configData.elements[pageId][sectionIdx][elementIdx] = {
-                        type = element.type,
-                        value = element.value,
-                        label = element.label
-                    }
+            for sectionIdx, section in ipairs(page.sections) do
+                configData.elements[pageId][sectionIdx] = {}
+                
+                for elementIdx, element in ipairs(section.elements) do
+                    if element.value ~= nil then
+                        configData.elements[pageId][sectionIdx][elementIdx] = {
+                            type = element.type,
+                            value = element.value,
+                            label = element.label
+                        }
+                    end
                 end
             end
         end
@@ -117,12 +102,12 @@ function ConfigSystem:SaveConfig(profileName)
     
     -- Save menu settings
     configData.menuSettings = {
-        colorIdx = self.state.colorIdx,
-        sounds = self.state.sounds,
-        particles = self.state.particles,
-        scanlines = self.state.scanlines,
-        glitchTitle = self.state.glitchTitle,
-        opacity = self.state.opacity,
+        colorIdx = State.colorIdx or 1,
+        sounds = State.sounds,
+        particles = State.particles,
+        scanlines = State.scanlines,
+        glitchTitle = State.glitchTitle,
+        opacity = State.opacity or 80,
     }
     
     self.profiles[profileName] = configData
@@ -149,23 +134,27 @@ function ConfigSystem:LoadConfig(profileName)
         return false
     end
     
+    local State = _G.State or {}
+    
     -- Restore element values
-    for pageId, pageData in pairs(configData.elements) do
-        if self.state.pages[pageId] then
-            local page = self.state.pages[pageId]
-            
-            for sectionIdx, sectionData in pairs(pageData) do
-                if page.sections[sectionIdx] then
-                    local section = page.sections[sectionIdx]
-                    
-                    for elementIdx, elementData in pairs(sectionData) do
-                        if section.elements[elementIdx] then
-                            local element = section.elements[elementIdx]
-                            element.value = elementData.value
-                            
-                            -- Trigger callback
-                            if element.callback then
-                                pcall(element.callback, elementData.value)
+    if State.pages then
+        for pageId, pageData in pairs(configData.elements) do
+            if State.pages[pageId] then
+                local page = State.pages[pageId]
+                
+                for sectionIdx, sectionData in pairs(pageData) do
+                    if page.sections[sectionIdx] then
+                        local section = page.sections[sectionIdx]
+                        
+                        for elementIdx, elementData in pairs(sectionData) do
+                            if section.elements[elementIdx] then
+                                local element = section.elements[elementIdx]
+                                element.value = elementData.value
+                                
+                                -- Trigger callback
+                                if element.callback then
+                                    pcall(element.callback, elementData.value)
+                                end
                             end
                         end
                     end
@@ -176,12 +165,12 @@ function ConfigSystem:LoadConfig(profileName)
     
     -- Restore menu settings
     if configData.menuSettings then
-        self.state.colorIdx = configData.menuSettings.colorIdx or self.state.colorIdx
-        self.state.sounds = configData.menuSettings.sounds
-        self.state.particles = configData.menuSettings.particles
-        self.state.scanlines = configData.menuSettings.scanlines
-        self.state.glitchTitle = configData.menuSettings.glitchTitle
-        self.state.opacity = configData.menuSettings.opacity or self.state.opacity
+        State.colorIdx = configData.menuSettings.colorIdx or State.colorIdx
+        State.sounds = configData.menuSettings.sounds
+        State.particles = configData.menuSettings.particles
+        State.scanlines = configData.menuSettings.scanlines
+        State.glitchTitle = configData.menuSettings.glitchTitle
+        State.opacity = configData.menuSettings.opacity or State.opacity
     end
     
     self.currentProfile = profileName
@@ -297,7 +286,6 @@ function ConfigSystem:LoadFromFile()
     return false
 end
 
--- Global instance
-_G.SpookyConfigSystem = ConfigSystem.new()
-
-return ConfigSystem
+-- Create and return instance
+local instance = ConfigSystem.new()
+return instance
