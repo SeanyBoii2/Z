@@ -14,13 +14,13 @@ local SCRIPTS = {
 		Name = "Motorcycle Tricks",
 		Description = "Perform insane motorcycle stunts & tricks",
 		Icon = "🏍️",
-		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Motorcycle%20Tricks%20Universal",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Motorcycle%20Tricks%20Universal.txt",
 	},
 	{
 		Name = "Superman Fly",
 		Description = "Fly around the map like Superman",
 		Icon = "🦸",
-		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Superman%20Fly%202%20updated",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Superman%20Fly/Fly%20Gui",
 	},
 	{
 		Name = "NPC Autofarm",
