@@ -26,13 +26,25 @@ local SCRIPTS = {
 		Name = "NPC Autofarm",
 		Description = "Automatically farm NPCs with targeting and auto kill",
 		Icon = "🎯",
-		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Universal%20Npc%20Autofarm",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Universal%20Npc%20Autofarm.txt",
 	},
 	{
 		Name = "Infinite Yield",
 		Description = "Powerful admin command script with 200+ commands",
 		Icon = "⚡",
-		URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Infinite%20Yield",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Infinite%20Yield.txt",
+	},
+	{
+		Name = "Animation Logger",
+		Description = "Log",
+		Icon = "⚡",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Animation%20Logger.txt",
+	},
+	{
+		Name = "Server Saver",
+		Description = "Log",
+		Icon = "⚡",
+		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Server%20Saver",
 	},
 }
 
