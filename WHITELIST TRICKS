@@ -78,6 +78,7 @@ Window:Notify("Welcome, " .. player.Name .. "!")
 --================================--
 local loadedScripts = {}
 
+local SCRIPTS = {
 	{
 		Name = "Motorcycle Tricks",
 		Description = "Perform insane motorcycle stunts & tricks",
