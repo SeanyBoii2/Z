@@ -36,9 +36,9 @@ local DISCORD = "spookyie"
 -- 2. YOUR GITHUB RAW URLS
 -- After uploading files to GitHub:
 -- - Click on each file → Click "Raw" button → Copy that URL
-local LIBRARY_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/SpookaliciousV4.lua"
-local CONFIG_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/ConfigSystem_Addon.lua"
-local ELEMENTS_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/NewElements_Addon.lua"
+local LIBRARY_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"
+local CONFIG_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/ConfigSystem_Addon.lua"
+local ELEMENTS_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/NewElements_Addon.lua"
 
 --================================--
 --         LOAD LIBRARY           --
