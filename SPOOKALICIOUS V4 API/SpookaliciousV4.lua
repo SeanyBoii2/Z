@@ -342,28 +342,95 @@ local function makeFrame(parent, props)
 end
 
 ------------------------------------------------------------------------
---  SOUND SYSTEM
+--  SOUND SYSTEM (MULTI-LAYERED + PITCH VARIATION)
 ------------------------------------------------------------------------
 local sounds = {}
-local function createSnd(vol, pitch)
+local SOUND_IDS = {
+    click = "rbxassetid://6042053626",  -- sharp UI click
+    blip  = "rbxassetid://6042053626",  -- same base, pitched differently
+}
+
+local function createSnd(id, vol, pitch)
     local s = Instance.new("Sound")
     s.Volume = vol or 0.2
     s.PlaybackSpeed = pitch or 1
-    s.SoundId = "rbxassetid://6042053626"
+    s.SoundId = id or SOUND_IDS.click
     s.Parent = SoundService
     return s
 end
-sounds.nav    = createSnd(0.12, 1.4)
-sounds.select = createSnd(0.22, 1.0)
-sounds.back   = createSnd(0.18, 0.7)
-sounds.slider = createSnd(0.08, 1.8)
-sounds.open   = createSnd(0.25, 0.5)
-sounds.toggle = createSnd(0.18, 1.2)
 
-local function playSound(name)
+-- Pre-create multiple sound instances per category for layering
+-- Navigation: quick light tick
+sounds.nav = createSnd(SOUND_IDS.click, 0.08, 1.8)
+
+-- Select: satisfying confirmation (two layered)
+sounds.select1 = createSnd(SOUND_IDS.click, 0.18, 1.05)
+sounds.select2 = createSnd(SOUND_IDS.click, 0.1, 1.6)
+
+-- Back: low thud
+sounds.back = createSnd(SOUND_IDS.click, 0.16, 0.5)
+
+-- Slider: tiny precise tick
+sounds.slider = createSnd(SOUND_IDS.click, 0.05, 2.4)
+
+-- Open: dramatic low boom + shimmer layer
+sounds.open1 = createSnd(SOUND_IDS.click, 0.25, 0.3)
+sounds.open2 = createSnd(SOUND_IDS.click, 0.12, 1.7)
+
+-- Close: medium reverse
+sounds.close1 = createSnd(SOUND_IDS.click, 0.18, 0.42)
+sounds.close2 = createSnd(SOUND_IDS.click, 0.08, 0.9)
+
+-- Toggle ON: rising confirmation
+sounds.toggleOn = createSnd(SOUND_IDS.click, 0.15, 1.5)
+
+-- Toggle OFF: falling deactivation
+sounds.toggleOff = createSnd(SOUND_IDS.click, 0.12, 0.65)
+
+-- Deny/error
+sounds.deny = createSnd(SOUND_IDS.click, 0.12, 0.35)
+
+local function playSnd(s, pitchVar)
+    if not s then return end
+    s:Stop()
+    -- Add slight random pitch variation for organic feel
+    if pitchVar then
+        local base = s.PlaybackSpeed
+        s.PlaybackSpeed = base + (math.random() - 0.5) * pitchVar
+        s:Play()
+        s.PlaybackSpeed = base -- reset for next play
+    else
+        s:Play()
+    end
+end
+
+local function playSound(name, extra)
     if not State.sounds then return end
-    local s = sounds[name]
-    if s then s:Stop(); s:Play() end
+
+    if name == "nav" then
+        playSnd(sounds.nav, 0.15)
+    elseif name == "select" then
+        playSnd(sounds.select1, 0.08)
+        task.delay(0.035, function() playSnd(sounds.select2, 0.1) end)
+    elseif name == "back" then
+        playSnd(sounds.back, 0.06)
+    elseif name == "slider" then
+        playSnd(sounds.slider, 0.3)
+    elseif name == "open" then
+        playSnd(sounds.open1, 0.04)
+        task.delay(0.06, function() playSnd(sounds.open2, 0.1) end)
+    elseif name == "close" then
+        playSnd(sounds.close1, 0.05)
+        task.delay(0.04, function() playSnd(sounds.close2, 0.08) end)
+    elseif name == "toggle" then
+        if extra then
+            playSnd(sounds.toggleOn, 0.12)
+        else
+            playSnd(sounds.toggleOff, 0.08)
+        end
+    elseif name == "deny" then
+        playSnd(sounds.deny, 0.04)
+    end
 end
 
 ------------------------------------------------------------------------
@@ -536,6 +603,7 @@ local innerBorder = makeFrame(mainFrame, {
     Position = UDim2.new(0, 6, 0, 6),
     BackgroundTransparency = 1,
     ZIndex = 11,
+    Active = false,
 })
 local innerStroke = addStroke(innerBorder, ct().border, 1, 0.72)
 addCorner(innerBorder, 4)
@@ -545,6 +613,7 @@ local topGlare = makeFrame(mainFrame, {
     BackgroundColor3 = ct().glow,
     BackgroundTransparency = 0.93,
     ZIndex = 13,
+    Active = false,
 })
 addGradient(topGlare, NumberSequence.new({
     NumberSequenceKeypoint.new(0, 0),
@@ -557,6 +626,7 @@ local botVig = makeFrame(mainFrame, {
     BackgroundColor3 = Color3.new(0,0,0),
     BackgroundTransparency = 0.92,
     ZIndex = 13,
+    Active = false,
 })
 addGradient(botVig, NumberSequence.new({
     NumberSequenceKeypoint.new(0, 1),
@@ -569,6 +639,7 @@ local fogA = makeFrame(mainFrame, {
     BackgroundColor3 = ct().fog,
     BackgroundTransparency = 0.94,
     ZIndex = 14,
+    Active = false,
 })
 addCorner(fogA, 80)
 
@@ -578,6 +649,7 @@ local fogB = makeFrame(mainFrame, {
     BackgroundColor3 = ct().fog,
     BackgroundTransparency = 0.95,
     ZIndex = 14,
+    Active = false,
 })
 addCorner(fogB, 80)
 
@@ -588,6 +660,7 @@ local scanlineOverlay = makeFrame(mainFrame, {
     BackgroundTransparency = 0.965,
     ZIndex = 46,
     ClipsDescendants = true,
+    Active = false,
 })
 
 -- Animated scanline bars (scroll downward)
@@ -612,6 +685,7 @@ local holoSweep = makeFrame(mainFrame, {
     BackgroundTransparency = 0.92,
     Rotation = 15,
     ZIndex = 48,
+    Active = false,
 })
 addGradient(holoSweep, NumberSequence.new({
     NumberSequenceKeypoint.new(0, 1),
@@ -628,6 +702,7 @@ local vigPulse = makeFrame(mainFrame, {
     BackgroundColor3 = Color3.new(0, 0, 0),
     BackgroundTransparency = 0.97,
     ZIndex = 45,
+    Active = false,
 })
 addCorner(vigPulse, 6)
 
@@ -638,6 +713,7 @@ local screenFlash = makeFrame(mainFrame, {
     BackgroundColor3 = Color3.new(1,1,1),
     BackgroundTransparency = 1,
     ZIndex = 55,
+    Active = false,
 })
 addCorner(screenFlash, 6)
 
@@ -649,6 +725,7 @@ local crtLeft = makeFrame(mainFrame, {
     BackgroundColor3 = Color3.fromRGB(255, 40, 80),
     BackgroundTransparency = 1,
     ZIndex = 49,
+    Active = false,
 })
 local crtRight = makeFrame(mainFrame, {
     Name = "CRTRight",
@@ -657,6 +734,7 @@ local crtRight = makeFrame(mainFrame, {
     BackgroundColor3 = Color3.fromRGB(60, 200, 255),
     BackgroundTransparency = 1,
     ZIndex = 49,
+    Active = false,
 })
 
 -- Matrix rain container (inside the panel)
@@ -665,6 +743,7 @@ local matrixContainer = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 1, 0),
     ClipsDescendants = true,
     ZIndex = 12,
+    Active = false,
 })
 
 -- Lightning container
@@ -673,6 +752,7 @@ local lightningContainer = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 1, 0),
     ClipsDescendants = true,
     ZIndex = 44,
+    Active = false,
 })
 
 ------------------------------------------------------------------------
@@ -1112,8 +1192,20 @@ local function createItemUI(index, item, yPos)
         BackgroundColor3 = c.border,
         BackgroundTransparency = sel and 0.87 or 1,
         ZIndex = 24,
+        Active = true,  -- receive mouse input
     })
     addCorner(frame, 3)
+
+    -- Mouse click to select + activate this item
+    if item.type ~= "section_header" then
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+                State.sel = index
+                doSelect()
+            end
+        end)
+    end
 
     if sel then
         frame.BackgroundTransparency = 1
@@ -1681,7 +1773,7 @@ function doSelect()
         renderView()
 
     elseif item.type == "toggle" then
-        playSound("toggle")
+        playSound("toggle", not item.value)  -- pass NEW state (before flip)
         item.value = not item.value
         doScreenFlash(0.92, 0.15, item.value and ct().onColor or ct().offColor)
         showToast(item.label .. ": " .. (item.value and "ON" or "OFF"))
@@ -1773,9 +1865,12 @@ end
 ------------------------------------------------------------------------
 --  OPEN / CLOSE
 ------------------------------------------------------------------------
+local _closeVersion = 0
+
 function toggleMenu(show)
     State.visible = show
     if show then
+        _closeVersion = _closeVersion + 1  -- cancel any pending delayed hide
         State.currentView = "home"
         State.sel = 1
         State.stack = {}
@@ -1807,13 +1902,10 @@ function toggleMenu(show)
 
         mainFrame.Position = UDim2.new(1, 20, targetPos.Y.Scale, targetPos.Y.Offset)
 
-        -- Start slightly scaled down for bounce effect
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset * 0.9, 0, mainFrame.Size.Y.Offset * 0.9)
-
+        -- Slide in with bounce
         tween(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Position = targetPos,
             BackgroundTransparency = 1 - (State.opacity / 100),
-            Size = UDim2.new(0, MENU_W, 0, mainFrame.Size.Y.Offset / 0.9),
         })
 
         -- Flash on open
@@ -1824,19 +1916,25 @@ function toggleMenu(show)
         playSound("open")
         bindKeys()
     else
+        _closeVersion = _closeVersion + 1
+        local myVersion = _closeVersion
         hintFrame.Visible = true
         State._lastPos = mainFrame.Position
 
         -- Flash before close
         doScreenFlash(0.85, 0.15, ct().border)
+        playSound("close")
 
-        tween(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        tween(mainFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(1, 20, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset),
             BackgroundTransparency = 1,
-            Size = UDim2.new(0, mainFrame.Size.X.Offset * 0.92, 0, mainFrame.Size.Y.Offset * 0.92),
         })
 
-        task.delay(0.28, function() mainFrame.Visible = false end)
+        task.delay(0.25, function()
+            if _closeVersion == myVersion then
+                mainFrame.Visible = false
+            end
+        end)
         unbindKeys()
     end
 end
@@ -1928,6 +2026,31 @@ end)
 UIS.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
         toggleMenu(not State.visible)
+    end
+end)
+
+-- Mouse scroll wheel to navigate items
+UIS.InputChanged:Connect(function(input, gp)
+    if not State.visible then return end
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        local items = State.flatItems
+        local count = #items
+        if count < 1 then return end
+        
+        local dir = input.Position.Z > 0 and -1 or 1  -- scroll up = prev, down = next
+        playSound("nav")
+        State.sel = State.sel + dir
+        if State.sel < 1 then State.sel = count end
+        if State.sel > count then State.sel = 1 end
+        -- Skip section headers
+        local tries = 0
+        while items[State.sel] and items[State.sel].type == "section_header" and tries < count do
+            State.sel = State.sel + dir
+            if State.sel < 1 then State.sel = count end
+            if State.sel > count then State.sel = 1 end
+            tries = tries + 1
+        end
+        renderView()
     end
 end)
 
@@ -2097,11 +2220,15 @@ RS.Heartbeat:Connect(function(dt)
         end
 
         -- ═══ HORIZONTAL CRT JITTER (whole panel micro-shake) ═══
-        if math.random() < 0.005 then
-            local origPos = mainFrame.Position
-            mainFrame.Position = UDim2.new(origPos.X.Scale, origPos.X.Offset + (math.random() - 0.5) * 4, origPos.Y.Scale, origPos.Y.Offset)
+        if math.random() < 0.005 and State.visible then
+            local origX = mainFrame.Position.X.Offset
+            local origScale = mainFrame.Position.X.Scale
+            local jitter = (math.random() - 0.5) * 4
+            mainFrame.Position = UDim2.new(origScale, origX + jitter, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset)
             task.delay(0.03, function()
-                mainFrame.Position = origPos
+                if State.visible then
+                    mainFrame.Position = UDim2.new(origScale, origX, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset)
+                end
             end)
         end
     end
