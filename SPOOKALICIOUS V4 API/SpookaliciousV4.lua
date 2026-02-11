@@ -40,13 +40,24 @@
     end)
     
     CONTROLS:
-      [       Open / Close menu
+      ALT     Open / Close menu
       W / S   Scroll up / down (wraps)
       A / D   Slider adjust / Dropdown cycle
       F/SPACE Select / Toggle / Activate
       X       Back / Close
       Drag titlebar to move. Drag corner to resize.
 --]]
+
+-- Prevent duplicate execution
+if _G.SpookaliciousV4Running then
+    warn("Spookalicious V4 already running! Destroying old instance...")
+    if _G.SpookaliciousV4Instance then
+        pcall(function()
+            _G.SpookaliciousV4Instance:Destroy()
+        end)
+    end
+end
+_G.SpookaliciousV4Running = true
 
 -- Services
 local Players       = game:GetService("Players")
@@ -64,6 +75,23 @@ local playerGui = player:WaitForChild("PlayerGui")
 ------------------------------------------------------------------------
 local old = playerGui:FindFirstChild("SpookaliciousV4")
 if old then old:Destroy() end
+
+------------------------------------------------------------------------
+--  CONNECTION TRACKING
+------------------------------------------------------------------------
+local connections = {}  -- Track all connections for cleanup
+
+local function addConnection(conn)
+    table.insert(connections, conn)
+    return conn
+end
+
+local function disconnectAll()
+    for _, conn in ipairs(connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    connections = {}
+end
 
 ------------------------------------------------------------------------
 --  THEME SYSTEM
@@ -1101,13 +1129,13 @@ do
             dragging = true; dragStart = input.Position; startPos = mainFrame.Position
         end
     end)
-    UIS.InputChanged:Connect(function(input)
+    addConnection(UIS.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local d = input.Position - dragStart
             mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
         end
-    end)
-    UIS.InputEnded:Connect(function(input)
+    end))
+    addConnection(UIS.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             if dragging then
                 State._userDragged = true
@@ -1115,7 +1143,7 @@ do
             end
             dragging = false
         end
-    end)
+    end))
 end
 
 ------------------------------------------------------------------------
@@ -1128,18 +1156,18 @@ do
             resizing = true; resizeStart = input.Position; startSize = mainFrame.AbsoluteSize
         end
     end)
-    UIS.InputChanged:Connect(function(input)
+    addConnection(UIS.InputChanged:Connect(function(input)
         if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local d = input.Position - resizeStart
             local nw = math.clamp(startSize.X + d.X, MENU_MIN_W, MENU_MAX_W)
             mainFrame.Size = UDim2.new(0, nw, mainFrame.Size.Y.Scale, mainFrame.Size.Y.Offset)
         end
-    end)
-    UIS.InputEnded:Connect(function(input)
+    end))
+    addConnection(UIS.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = false
         end
-    end)
+    end))
 end
 
 ------------------------------------------------------------------------
@@ -2023,15 +2051,21 @@ task.spawn(function()
     end
 end)
 
-UIS.InputBegan:Connect(function(input, gp)
+------------------------------------------------------------------------
+--  GLOBAL INPUT HANDLERS (WITH PROPER GP CHECKING)
+------------------------------------------------------------------------
+
+-- LeftAlt toggle (fixed with gp check)
+addConnection(UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end  -- CRITICAL: Ignore if game processed (prevents chat conflicts)
     if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
         toggleMenu(not State.visible)
     end
-end)
+end))
 
--- Mouse scroll wheel to navigate items
-UIS.InputChanged:Connect(function(input, gp)
-    if not State.visible then return end
+-- Mouse scroll wheel to navigate items (fixed with gp check)
+addConnection(UIS.InputChanged:Connect(function(input, gp)
+    if not State.visible or gp then return end  -- CRITICAL: Check gp here too
     if input.UserInputType == Enum.UserInputType.MouseWheel then
         local items = State.flatItems
         local count = #items
@@ -2052,7 +2086,7 @@ UIS.InputChanged:Connect(function(input, gp)
         end
         renderView()
     end
-end)
+end))
 
 ------------------------------------------------------------------------
 --  VISUAL EFFECTS LOOP
@@ -2065,7 +2099,7 @@ local scanlineScroll = 0
 local crtGlitchTimer = 0
 local lightningTimer = 0
 
-RS.Heartbeat:Connect(function(dt)
+addConnection(RS.Heartbeat:Connect(function(dt)
     phase = phase + dt
     rainbowHue = (rainbowHue + dt * 0.08) % 1
     holoTimer = holoTimer + dt
@@ -2232,7 +2266,7 @@ RS.Heartbeat:Connect(function(dt)
             end)
         end
     end
-end)
+end))
 
 task.spawn(function()
     while true do
@@ -2700,12 +2734,12 @@ function Library:CreateWindow(title, version)
                 }
                 table.insert(sec.elements, el)
 
-                UIS.InputBegan:Connect(function(input, gp)
+                addConnection(UIS.InputBegan:Connect(function(input, gp)
                     if gp then return end
                     if not State.visible and el.value and input.KeyCode == el.value then
                         if callback then callback(el.value) end
                     end
-                end)
+                end))
 
                 return {
                     Set = function(_, key)
@@ -2739,11 +2773,15 @@ function Library:CreateWindow(title, version)
     end
 
     function Window:Destroy()
+        _G.SpookaliciousV4Running = false
+        _G.SpookaliciousV4Instance = nil
         State.visible = false
         unbindKeys()
+        disconnectAll()
         gui:Destroy()
     end
 
+    _G.SpookaliciousV4Instance = Window
     return Window
 end
 
