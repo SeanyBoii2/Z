@@ -43,7 +43,7 @@
       [       Open / Close menu
       W / S   Scroll up / down (wraps)
       A / D   Slider adjust / Dropdown cycle
-      F       Select / Toggle / Activate
+      F/SPACE Select / Toggle / Activate
       X       Back / Close
       Drag titlebar to move. Drag corner to resize.
 --]]
@@ -1248,8 +1248,15 @@ local function buildFlatItems()
                 pageId = pageId,
             })
         end
-        -- Built-in settings at bottom
-        table.insert(State.flatItems, { type = "section_header", label = "Settings" })
+        -- Built-in settings as a page link
+        table.insert(State.flatItems, {
+            type = "page_link",
+            label = "Settings",
+            pageId = "__settings__",
+        })
+    elseif State.currentView == "__settings__" then
+        -- Show settings page
+        table.insert(State.flatItems, { type = "section_header", label = "Menu Settings" })
         table.insert(State.flatItems, { type = "button", label = "Menu Color", callback = function()
             State.colorIdx = (State.colorIdx % #THEMES) + 1
             showToast("Theme: " .. ct().name)
@@ -1296,6 +1303,8 @@ function renderView()
     -- Subtitle
     if State.currentView == "home" then
         subtitleLabel.Text = utf8.char(0x1F383) .. " MAIN MENU " .. utf8.char(0x1F383)
+    elseif State.currentView == "__settings__" then
+        subtitleLabel.Text = utf8.char(0x1F383) .. " SETTINGS " .. utf8.char(0x1F383)
     else
         local pg = State.pages[State.currentView]
         subtitleLabel.Text = pg and (utf8.char(0x1F383) .. " " .. string.upper(pg.name) .. " " .. utf8.char(0x1F383)) or "---"
@@ -1307,7 +1316,7 @@ function renderView()
         '<font color="#50ff90">ALT</font> TOGGLE   '..
         '<font color="#ffaa40">W/S</font> SCROLL   '..
         '<font color="#ffaa40">A/D</font> ADJUST   '..
-        '<font color="#d8a0ff">F</font> SELECT   '..
+        '<font color="#d8a0ff">F/SPACE</font> SELECT   '..
         '<font color="#ff4070">X</font> %s', bk
     )
 
@@ -1573,7 +1582,7 @@ function bindKeys()
                 doSliderAdjust(-1)
             elseif k == Enum.KeyCode.D or k == Enum.KeyCode.Right then
                 doSliderAdjust(1)
-            elseif k == Enum.KeyCode.F or k == Enum.KeyCode.Return then
+            elseif k == Enum.KeyCode.F or k == Enum.KeyCode.Space then
                 doSelect()
             elseif k == Enum.KeyCode.X or k == Enum.KeyCode.Escape then
                 doGoBack()
