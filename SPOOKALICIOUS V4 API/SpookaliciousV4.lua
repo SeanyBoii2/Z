@@ -411,8 +411,8 @@ end
 ------------------------------------------------------------------------
 local toastContainer = makeFrame(gui, {
     Name = "Toasts",
-    Size = UDim2.new(0, 280, 1, 0),
-    Position = UDim2.new(1, -295, 0, 0),
+    Size = UDim2.new(0, 360, 1, 0),
+    Position = UDim2.new(1, -375, 0, 0),
     ZIndex = 80,
     ClipsDescendants = false,
 })
@@ -501,11 +501,12 @@ local function showToast(msg)
     local lbl = makeLabel(frame, {
         Size = UDim2.new(1, -36, 1, 0),
         Position = UDim2.new(0, 30, 0, 0),
-        TextSize = 13,
+        TextSize = 12,
         TextColor3 = c.accent,
         TextXAlignment = Enum.TextXAlignment.Left,
         Text = msg,
         ZIndex = 84,
+        TextTruncate = Enum.TextTruncate.AtEnd,
     })
     addStroke(lbl, c.bg, 0.9, 0.35, Enum.ApplyStrokeMode.Contextual)
 
@@ -597,7 +598,7 @@ local MENU_MIN_W, MENU_MAX_W = 280, 520
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "Panel"
 mainFrame.Size = UDim2.new(0, MENU_W, 0, 450)
-mainFrame.Position = UDim2.new(1, -MENU_W - 16, 0.5, -225)
+mainFrame.Position = UDim2.new(1, -MENU_W - 16, 0, 60)
 mainFrame.BackgroundColor3 = ct().bg
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.BorderSizePixel = 0
@@ -1414,11 +1415,32 @@ function renderView()
         itemsFrame.CanvasPosition = Vector2.new(0, selY + H_ITEM - viewH)
     end
 
-    -- Resize frame
+    -- Resize frame - keep top edge anchored
     local itemsH = math.min(totalH, 340)
     itemsFrame.Size = UDim2.new(1, -8, 0, itemsH)
     local totalFrameH = itemsY + itemsH + 8 + 32 + 12
+    
+    -- Save current top Y position before resizing
+    local currentTopY = mainFrame.AbsolutePosition.Y
+    local screenH = gui.AbsoluteSize.Y
+    
     mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, totalFrameH)
+    
+    -- Re-anchor: keep the top edge where it was (convert absolute back to UDim2)
+    if screenH > 0 and State.visible then
+        local topScale = currentTopY / screenH
+        -- Clamp so menu doesn't go off screen at bottom
+        local maxTopY = screenH - totalFrameH - 10
+        if currentTopY > maxTopY and maxTopY > 0 then
+            topScale = maxTopY / screenH
+        end
+        mainFrame.Position = UDim2.new(
+            mainFrame.Position.X.Scale, 
+            mainFrame.Position.X.Offset, 
+            0, 
+            math.max(10, topScale * screenH)
+        )
+    end
 
     botSep.Position = UDim2.new(0, 14, 0, itemsY + itemsH + 4)
     footerLabel.Position = UDim2.new(0, 2, 0, itemsY + itemsH + 8)
@@ -1557,18 +1579,20 @@ end
 --  Press V again or ALT to go back to keyboard mode / close.
 ------------------------------------------------------------------------
 local function enableMouseMode()
+    if State.mouseMode then return end  -- already on
     State.mouseMode = true
-    unbindKeys()  -- release all keyboard sinks so game gets input
-    showToast("Mouse Mode ON - click to select, V to exit")
+    unbindKeys()
+    showToast("Mouse Mode ON - V to exit")
     renderView()
 end
 
 local function disableMouseMode()
+    if not State.mouseMode then return end  -- already off
     State.mouseMode = false
     if State.visible then
-        bindKeys()  -- re-bind keyboard sink
+        bindKeys()
     end
-    showToast("Mouse Mode OFF - keyboard controls active")
+    showToast("Mouse Mode OFF")
     renderView()
 end
 
@@ -1605,7 +1629,8 @@ function toggleMenu(show)
         if State._userDragged then
             targetPos = State._lastPos
         else
-            targetPos = UDim2.new(1, -menuW - 16, 0.5, -menuH / 2)
+            -- Top-anchor: place menu at roughly 15% from top, right side
+            targetPos = UDim2.new(1, -menuW - 16, 0, 60)
         end
 
         mainFrame.Position = UDim2.new(1, 20, targetPos.Y.Scale, targetPos.Y.Offset)
@@ -1659,7 +1684,7 @@ local SINK = "SpookaliciousV4Sink"
 local BLOCKED = {
     Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D,
     Enum.KeyCode.F, Enum.KeyCode.E, Enum.KeyCode.R, Enum.KeyCode.Q,
-    Enum.KeyCode.X, Enum.KeyCode.Z, Enum.KeyCode.C, Enum.KeyCode.V,
+    Enum.KeyCode.X, Enum.KeyCode.Z, Enum.KeyCode.C,
     Enum.KeyCode.G, Enum.KeyCode.T, Enum.KeyCode.B, Enum.KeyCode.Y,
     Enum.KeyCode.Space, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift,
     Enum.KeyCode.LeftControl, Enum.KeyCode.Tab, Enum.KeyCode.Return,
@@ -1681,12 +1706,6 @@ function bindKeys()
         local k = inputObj.KeyCode
         if inputState == Enum.UserInputState.Begin then
             heldKeys[k] = tick()
-
-            -- V toggles mouse mode
-            if k == Enum.KeyCode.V then
-                enableMouseMode()
-                return Enum.ContextActionResult.Sink
-            end
 
             local items = State.flatItems
             local count = #items
@@ -1758,9 +1777,17 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
         return
     end
 
-    -- V key: exit mouse mode when in mouse mode
-    if input.KeyCode == Enum.KeyCode.V and State.mouseMode and State.visible then
-        disableMouseMode()
+    -- V key: toggle mouse mode (only when menu is open)
+    if input.KeyCode == Enum.KeyCode.V and State.visible then
+        if State._vToggling then return end
+        State._vToggling = true
+        task.delay(0.25, function() State._vToggling = false end)
+        
+        if State.mouseMode then
+            disableMouseMode()
+        else
+            enableMouseMode()
+        end
         return
     end
 end)
