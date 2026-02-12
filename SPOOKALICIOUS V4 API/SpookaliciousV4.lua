@@ -275,19 +275,20 @@ local DEFAULT_STATE = {
 }
 
 ------------------------------------------------------------------------
---  RIPPLE CLICK EFFECT
+--  RIPPLE CLICK EFFECT (dual-layer: fill + ring)
 ------------------------------------------------------------------------
 local function createRipple(parent, posX, posY)
     if not State.particles then return end
     local c = ct()
     
+    -- Inner fill ripple
     local ripple = Instance.new("Frame")
     ripple.BorderSizePixel = 0
     ripple.Size = UDim2.new(0, 0, 0, 0)
     ripple.Position = UDim2.new(0, posX, 0, posY)
     ripple.AnchorPoint = Vector2.new(0.5, 0.5)
     ripple.BackgroundColor3 = c.glow
-    ripple.BackgroundTransparency = 0.3
+    ripple.BackgroundTransparency = 0.4
     ripple.ZIndex = 100
     ripple.Parent = parent
     
@@ -295,12 +296,39 @@ local function createRipple(parent, posX, posY)
     corner.CornerRadius = UDim.new(0, 200)
     corner.Parent = ripple
     
-    TS:Create(ripple, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 120, 0, 120),
+    TS:Create(ripple, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 100, 0, 100),
         BackgroundTransparency = 1,
     }):Play()
     
-    task.delay(0.65, function() ripple:Destroy() end)
+    -- Outer ring ripple (stroke only)
+    local ring = Instance.new("Frame")
+    ring.BorderSizePixel = 0
+    ring.Size = UDim2.new(0, 6, 0, 6)
+    ring.Position = UDim2.new(0, posX, 0, posY)
+    ring.AnchorPoint = Vector2.new(0.5, 0.5)
+    ring.BackgroundTransparency = 1
+    ring.ZIndex = 101
+    ring.Parent = parent
+    
+    local ringCorner = Instance.new("UICorner")
+    ringCorner.CornerRadius = UDim.new(0, 200)
+    ringCorner.Parent = ring
+    
+    local ringStroke = addStroke(ring, c.accent, 2, 0.1)
+    
+    TS:Create(ring, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 140, 0, 140),
+    }):Play()
+    TS:Create(ringStroke, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Transparency = 1,
+        Thickness = 0.5,
+    }):Play()
+    
+    task.delay(0.7, function()
+        ripple:Destroy()
+        ring:Destroy()
+    end)
 end
 
 ------------------------------------------------------------------------
@@ -373,7 +401,7 @@ local function makeFrame(parent, props)
 end
 
 ------------------------------------------------------------------------
---  ENHANCED SOUND SYSTEM
+--  ENHANCED SOUND SYSTEM (unique IDs per action)
 ------------------------------------------------------------------------
 local sounds = {}
 local function createSnd(vol, pitch, id)
@@ -385,24 +413,66 @@ local function createSnd(vol, pitch, id)
     return s
 end
 
-sounds.nav    = {createSnd(0.12, 1.4), createSnd(0.12, 1.5), createSnd(0.12, 1.3)}
-sounds.select = {createSnd(0.22, 1.0), createSnd(0.22, 1.1)}
-sounds.back   = createSnd(0.18, 0.7)
-sounds.slider = createSnd(0.08, 1.8)
-sounds.open   = createSnd(0.25, 0.5)
-sounds.toggle = {createSnd(0.18, 1.2), createSnd(0.18, 1.3)}
-sounds.hover  = createSnd(0.05, 2.2)
-sounds.success = createSnd(0.14, 1.5)
+-- Navigation: soft tick/click sounds
+sounds.nav = {
+    createSnd(0.10, 1.6, "rbxassetid://6042053626"),
+    createSnd(0.10, 1.5, "rbxassetid://6042053626"),
+    createSnd(0.10, 1.7, "rbxassetid://6042053626"),
+}
+-- Select: satisfying confirm pop
+sounds.select = {
+    createSnd(0.18, 1.1, "rbxassetid://6895079853"),
+    createSnd(0.18, 1.0, "rbxassetid://6895079853"),
+}
+-- Back: low thud
+sounds.back = createSnd(0.16, 0.6, "rbxassetid://6042053626")
+-- Slider: subtle notch tick
+sounds.slider = createSnd(0.06, 2.2, "rbxassetid://6042053626")
+-- Open: dramatic whoosh
+sounds.open = createSnd(0.22, 0.45, "rbxassetid://6895079853")
+-- Close: reverse whoosh
+sounds.close = createSnd(0.15, 0.7, "rbxassetid://6042053626")
+-- Toggle: snappy switch
+sounds.toggle = {
+    createSnd(0.15, 1.3, "rbxassetid://6895079853"),
+    createSnd(0.15, 1.4, "rbxassetid://6895079853"),
+}
+-- Hover: barely audible whisper
+sounds.hover = createSnd(0.03, 2.5, "rbxassetid://6042053626")
+-- Success: bright chime
+sounds.success = createSnd(0.12, 1.6, "rbxassetid://6895079853")
+-- Page transition: whoosh sweep
+sounds.page = createSnd(0.14, 0.9, "rbxassetid://6895079853")
+-- Theme change: magical shimmer
+sounds.theme = createSnd(0.16, 1.8, "rbxassetid://6895079853")
+-- Error: low buzz
+sounds.error = createSnd(0.10, 0.4, "rbxassetid://6042053626")
+
+local basePitches = {}
+for name, snd in pairs(sounds) do
+    if type(snd) == "table" then
+        basePitches[name] = {}
+        for i, s in ipairs(snd) do
+            basePitches[name][i] = s.PlaybackSpeed
+        end
+    else
+        basePitches[name] = snd.PlaybackSpeed
+    end
+end
 
 local function playSound(name)
     if not State.sounds then return end
     local s = sounds[name]
+    local bp = basePitches[name]
     if type(s) == "table" then
-        s = s[math.random(1, #s)]
+        local idx = math.random(1, #s)
+        s = s[idx]
+        bp = bp[idx]
     end
-    if s then 
-        s.PlaybackSpeed = s.PlaybackSpeed + (math.random() - 0.5) * 0.1
-        s:Stop(); s:Play() 
+    if s and bp then
+        -- Micro pitch variation for organic feel (stays near original)
+        s.PlaybackSpeed = bp + (math.random() - 0.5) * 0.08
+        s:Stop(); s:Play()
     end
 end
 
@@ -509,6 +579,23 @@ local function showToast(msg)
         TextTruncate = Enum.TextTruncate.AtEnd,
     })
     addStroke(lbl, c.bg, 0.9, 0.35, Enum.ApplyStrokeMode.Contextual)
+    
+    -- Timer drain bar at bottom
+    local drain = Instance.new("Frame")
+    drain.Size = UDim2.new(1, 0, 0, 2)
+    drain.Position = UDim2.new(0, 0, 1, -2)
+    drain.BackgroundColor3 = c.glow
+    drain.BackgroundTransparency = 0.15
+    drain.BorderSizePixel = 0
+    drain.ZIndex = 85
+    drain.Parent = frame
+    addCorner(drain, 1)
+    
+    -- Drain shrinks to 0 over toast duration
+    quickTween(drain, TOAST_DURATION, {
+        Size = UDim2.new(0, 0, 0, 2),
+        BackgroundTransparency = 0.6,
+    }, Enum.EasingStyle.Linear)
 
     local entry = { frame = frame }
     table.insert(activeToasts, entry)
@@ -526,6 +613,7 @@ local function showToast(msg)
         quickTween(lbl, 0.25, { TextTransparency = 1 })
         quickTween(bar, 0.25, { BackgroundTransparency = 1 })
         quickTween(icon, 0.25, { TextTransparency = 1 })
+        quickTween(drain, 0.15, { BackgroundTransparency = 1 })
 
         task.delay(0.3, function()
             for i, t in ipairs(activeToasts) do
@@ -663,6 +751,86 @@ local fogB = makeFrame(mainFrame, {
 })
 addCorner(fogB, 100)
 
+-- ═══════════════════════════════════════════════════════════
+--  NEW: CORNER ACCENT BRACKETS (L-shaped marks in corners)
+-- ═══════════════════════════════════════════════════════════
+local cornerSize = 18
+local cornerThick = 2
+local corners = {}
+
+for _, corner in ipairs({
+    {ax = 0, ay = 0, px = 8, py = 8},       -- top-left
+    {ax = 1, ay = 0, px = -8, py = 8},      -- top-right
+    {ax = 0, ay = 1, px = 8, py = -8},      -- bottom-left
+    {ax = 1, ay = 1, px = -8, py = -8},     -- bottom-right
+}) do
+    -- Horizontal bar
+    local h = makeFrame(mainFrame, {
+        Size = UDim2.new(0, cornerSize, 0, cornerThick),
+        Position = UDim2.new(corner.ax, corner.px, corner.ay, corner.py),
+        AnchorPoint = Vector2.new(corner.ax, corner.ay),
+        BackgroundColor3 = ct().glow,
+        BackgroundTransparency = 0.3,
+        ZIndex = 48,
+    })
+    addCorner(h, 1)
+    table.insert(corners, h)
+    
+    -- Vertical bar
+    local v = makeFrame(mainFrame, {
+        Size = UDim2.new(0, cornerThick, 0, cornerSize),
+        Position = UDim2.new(corner.ax, corner.px, corner.ay, corner.py),
+        AnchorPoint = Vector2.new(corner.ax, corner.ay),
+        BackgroundColor3 = ct().glow,
+        BackgroundTransparency = 0.3,
+        ZIndex = 48,
+    })
+    addCorner(v, 1)
+    table.insert(corners, v)
+end
+
+-- ═══════════════════════════════════════════════════════════
+--  NEW: TITLE GLOW HALO (soft radial glow behind title)
+-- ═══════════════════════════════════════════════════════════
+local titleHalo = makeFrame(mainFrame, {
+    Size = UDim2.new(0.6, 0, 0, 50),
+    Position = UDim2.new(0.2, 0, 0, 12),
+    BackgroundColor3 = ct().glow,
+    BackgroundTransparency = 0.92,
+    ZIndex = 12,
+})
+addCorner(titleHalo, 25)
+
+-- ═══════════════════════════════════════════════════════════
+--  NEW: LIGHT SWEEP (horizontal shimmer that passes across)
+-- ═══════════════════════════════════════════════════════════
+local lightSweep = makeFrame(mainFrame, {
+    Size = UDim2.new(0.15, 0, 1, 0),
+    Position = UDim2.new(-0.2, 0, 0, 0),
+    BackgroundColor3 = Color3.new(1, 1, 1),
+    BackgroundTransparency = 0.96,
+    ZIndex = 45,
+    ClipsDescendants = false,
+})
+addGradient(lightSweep, NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 1),
+    NumberSequenceKeypoint.new(0.4, 0),
+    NumberSequenceKeypoint.new(0.6, 0),
+    NumberSequenceKeypoint.new(1, 1),
+}))
+
+-- ═══════════════════════════════════════════════════════════
+--  NEW: THIRD FOG BLOB (adds depth)
+-- ═══════════════════════════════════════════════════════════
+local fogC = makeFrame(mainFrame, {
+    Size = UDim2.new(0.45, 0, 0.45, 0),
+    Position = UDim2.new(0.5, 0, 0.25, 0),
+    BackgroundColor3 = ct().fog,
+    BackgroundTransparency = 0.95,
+    ZIndex = 14,
+})
+addCorner(fogC, 80)
+
 local scanlineOverlay = makeFrame(mainFrame, {
     Name = "Scanlines",
     Size = UDim2.new(1, 0, 1, 0),
@@ -751,6 +919,26 @@ local subtitleLabel = makeLabel(subtitleBanner, {
     TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
 })
 addStroke(subtitleLabel, ct().bg, 1.3, 0.2, Enum.ApplyStrokeMode.Contextual)
+
+-- Pulsing status dot (left of subtitle)
+local statusDot = makeFrame(subtitleBanner, {
+    Size = UDim2.new(0, 6, 0, 6),
+    Position = UDim2.new(0, 8, 0.5, -3),
+    BackgroundColor3 = ct().onColor,
+    BackgroundTransparency = 0.1,
+    ZIndex = 22,
+})
+addCorner(statusDot, 3)
+
+-- Status dot glow ring
+local dotGlow = makeFrame(subtitleBanner, {
+    Size = UDim2.new(0, 12, 0, 12),
+    Position = UDim2.new(0, 5, 0.5, -6),
+    BackgroundColor3 = ct().onColor,
+    BackgroundTransparency = 0.75,
+    ZIndex = 21,
+})
+addCorner(dotGlow, 6)
 
 local topSep = makeFrame(mainFrame, {
     Size = UDim2.new(1, -28, 0, 1.5),
@@ -974,6 +1162,7 @@ local function createItemUI(index, item, yPos)
         frame.BackgroundTransparency = 1
         quickTween(frame, 0.25, { BackgroundTransparency = 0.87 })
 
+        -- Side accent bars with glow
         for _, side in ipairs({"left","right"}) do
             local bar = makeFrame(frame, {
                 Size = UDim2.new(0, 2, 0, 0),
@@ -992,55 +1181,147 @@ local function createItemUI(index, item, yPos)
                 BackgroundTransparency = 0.05,
             }, Enum.EasingStyle.Back)
         end
+        
+        -- Selection glow dot (left indicator)
+        local dot = makeFrame(frame, {
+            Size = UDim2.new(0, 6, 0, 6),
+            Position = UDim2.new(0, -4, 0.5, -3),
+            BackgroundColor3 = c.glow,
+            BackgroundTransparency = 0.1,
+            ZIndex = 27,
+        })
+        addCorner(dot, 3)
+        addStroke(dot, c.glow, 2, 0.6)
+        
+        -- Dot pop-in animation
+        dot.Size = UDim2.new(0, 0, 0, 0)
+        dot.Position = UDim2.new(0, -1, 0.5, 0)
+        quickTween(dot, 0.3, {
+            Size = UDim2.new(0, 6, 0, 6),
+            Position = UDim2.new(0, -4, 0.5, -3),
+        }, Enum.EasingStyle.Back)
+        
+        -- Subtle top shimmer highlight
+        local shimmer = makeFrame(frame, {
+            Size = UDim2.new(1, -8, 0, 1),
+            Position = UDim2.new(0, 4, 0, 1),
+            BackgroundColor3 = c.accent,
+            BackgroundTransparency = 0.75,
+            ZIndex = 26,
+        })
+        addCorner(shimmer, 1)
+        addGradient(shimmer, NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.3, 0),
+            NumberSequenceKeypoint.new(0.7, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }))
     end
 
     -- SECTION HEADER
     if item.type == "section_header" then
-        makeFrame(frame, {
-            Size = UDim2.new(0.2, 0, 0, 1),
-            Position = UDim2.new(0, 14, 0.5, 0),
+        -- Left gradient line
+        local sep1 = makeFrame(frame, {
+            Size = UDim2.new(0.25, 0, 0, 1),
+            Position = UDim2.new(0, 10, 0.5, 0),
             BackgroundColor3 = c.sectionColor,
-            BackgroundTransparency = 0.5,
+            BackgroundTransparency = 0.3,
             ZIndex = 27,
         })
-        makeFrame(frame, {
-            Size = UDim2.new(0.2, 0, 0, 1),
-            Position = UDim2.new(0.8, -14, 0.5, 0),
+        addGradient(sep1, NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 0),
+        }))
+        addCorner(sep1, 1)
+        
+        -- Right gradient line
+        local sep2 = makeFrame(frame, {
+            Size = UDim2.new(0.25, 0, 0, 1),
+            Position = UDim2.new(0.75, -10, 0.5, 0),
             BackgroundColor3 = c.sectionColor,
-            BackgroundTransparency = 0.5,
+            BackgroundTransparency = 0.3,
             ZIndex = 27,
         })
+        addGradient(sep2, NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }))
+        addCorner(sep2, 1)
+        
+        -- Center label with diamond ornaments
         makeLabel(frame, {
-            Size = UDim2.new(0.6, 0, 1, 0),
-            Position = UDim2.new(0.2, 0, 0, 0),
-            TextSize = 12,
+            Size = UDim2.new(0.5, 0, 1, 0),
+            Position = UDim2.new(0.25, 0, 0, 0),
+            TextSize = 11,
             TextColor3 = c.sectionColor,
-            Text = string.upper(item.label),
+            Text = "◆ " .. string.upper(item.label) .. " ◆",
             ZIndex = 27,
         })
 
     elseif item.type == "page_link" then
         local lbl = makeLabel(frame, {
-            Size = UDim2.new(1, -14, 1, 0),
-            Position = UDim2.new(0, 7, 0, 0),
+            Size = UDim2.new(1, -40, 1, 0),
+            Position = UDim2.new(0, 12, 0, 0),
             TextSize = 16,
             TextColor3 = sel and c.accent or c.accentDim,
-            Text = "[ " .. string.upper(item.label) .. "  > ]",
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Text = string.upper(item.label),
             ZIndex = 27,
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
+        
+        -- Right arrow indicator
+        local arrow = makeLabel(frame, {
+            Size = UDim2.new(0, 24, 1, 0),
+            Position = sel and UDim2.new(1, -30, 0, 0) or UDim2.new(1, -34, 0, 0),
+            TextSize = 16,
+            TextColor3 = sel and c.glow or c.accentDim,
+            Text = "›",
+            ZIndex = 27,
+        })
+        
+        -- Arrow slide animation when selected
+        if sel then
+            arrow.Position = UDim2.new(1, -38, 0, 0)
+            quickTween(arrow, 0.25, {
+                Position = UDim2.new(1, -28, 0, 0),
+            }, Enum.EasingStyle.Back)
+        end
 
     elseif item.type == "toggle" then
         local on = item.value
-        local clr = on and string.format("#%02x%02x%02x", c.onColor.R*255, c.onColor.G*255, c.onColor.B*255)
-                        or string.format("#%02x%02x%02x", c.offColor.R*255, c.offColor.G*255, c.offColor.B*255)
-        local word = on and "ON" or "OFF"
+        local stateColor = on and c.onColor or c.offColor
+        
+        -- Toggle switch track
+        local switchTrack = makeFrame(frame, {
+            Size = UDim2.new(0, 28, 0, 14),
+            Position = UDim2.new(0, 12, 0.5, -7),
+            BackgroundColor3 = on and c.onColor or c.offColor,
+            BackgroundTransparency = on and 0.55 or 0.7,
+            ZIndex = 28,
+        })
+        addCorner(switchTrack, 7)
+        
+        -- Toggle knob
+        local knob = makeFrame(switchTrack, {
+            Size = UDim2.new(0, 10, 0, 10),
+            Position = on and UDim2.new(1, -12, 0.5, -5) or UDim2.new(0, 2, 0.5, -5),
+            BackgroundColor3 = on and c.onColor or Color3.fromRGB(120, 120, 120),
+            BackgroundTransparency = 0,
+            ZIndex = 29,
+        })
+        addCorner(knob, 5)
+        
+        -- Label
         local lbl = makeLabel(frame, {
-            Size = UDim2.new(1, -14, 1, 0),
-            Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 16,
+            Size = UDim2.new(1, -52, 1, 0),
+            Position = UDim2.new(0, 46, 0, 0),
+            TextSize = 15,
             TextColor3 = sel and c.accent or c.accentDim,
-            Text = string.format('[ <font color="%s">%s</font>  %s ]', clr, word, string.upper(item.label)),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Text = string.upper(item.label),
             ZIndex = 27,
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
@@ -1165,12 +1446,23 @@ local function createItemUI(index, item, yPos)
         end
 
     elseif item.type == "button" then
+        -- Execute icon
+        makeLabel(frame, {
+            Size = UDim2.new(0, 20, 1, 0),
+            Position = UDim2.new(0, 10, 0, 0),
+            TextSize = 12,
+            TextColor3 = sel and c.glow or c.accentDim,
+            Text = "▶",
+            ZIndex = 27,
+        })
+        
         local lbl = makeLabel(frame, {
-            Size = UDim2.new(1, -14, 1, 0),
-            Position = UDim2.new(0, 7, 0, 0),
-            TextSize = 16,
+            Size = UDim2.new(1, -40, 1, 0),
+            Position = UDim2.new(0, 30, 0, 0),
+            TextSize = 15,
             TextColor3 = sel and c.accent or c.accentDim,
-            Text = "[ " .. string.upper(item.label) .. " ]",
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Text = string.upper(item.label),
             ZIndex = 27,
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
@@ -1331,6 +1623,7 @@ local function buildFlatItems()
         table.insert(State.flatItems, { type = "section_header", label = "Menu Settings" })
         table.insert(State.flatItems, { type = "button", label = "Menu Color", callback = function()
             State.colorIdx = (State.colorIdx % #THEMES) + 1
+            playSound("theme")
             showToast("Theme: " .. ct().name)
         end })
         table.insert(State.flatItems, { type = "toggle", label = "Menu Sounds", value = State.sounds, callback = function(v) State.sounds = v end })
@@ -1469,6 +1762,15 @@ function renderView()
     resizeStroke.Color = c.border
     resizeIcon.TextColor3 = c.glow
     resizeHandle.BackgroundColor3 = c.bg
+    
+    -- New visual elements
+    titleHalo.BackgroundColor3 = c.glow
+    fogC.BackgroundColor3 = c.fog
+    for _, cb in ipairs(corners) do
+        cb.BackgroundColor3 = c.glow
+    end
+    statusDot.BackgroundColor3 = c.onColor
+    dotGlow.BackgroundColor3 = c.onColor
 
     mainFrame.BackgroundTransparency = 1 - (State.opacity / 100)
 end
@@ -1483,7 +1785,7 @@ function doSelect()
     if not item then return end
 
     if item.type == "page_link" then
-        playSound("select")
+        playSound("page")
         table.insert(State.stack, State.currentView)
         State.currentView = item.pageId
         State.sel = 1
@@ -1657,10 +1959,48 @@ function toggleMenu(show)
 
         playSound("open")
         bindKeys()
+        
+        -- Flash overlay on open
+        local flash = makeFrame(mainFrame, {
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundColor3 = ct().glow,
+            BackgroundTransparency = 0.7,
+            ZIndex = 55,
+        })
+        quickTween(flash, 0.5, { BackgroundTransparency = 1 })
+        task.delay(0.55, function() flash:Destroy() end)
+        
+        -- Burst particles from center on open
+        task.spawn(function()
+            if not State.particles then return end
+            local c = ct()
+            for i = 1, 12 do
+                local angle = (i / 12) * math.pi * 2
+                local size = math.random(3, 6)
+                local p = makeFrame(mainFrame, {
+                    Size = UDim2.new(0, size, 0, size),
+                    Position = UDim2.new(0.5, 0, 0.3, 0),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundColor3 = c.particle,
+                    BackgroundTransparency = 0.15,
+                    ZIndex = 50,
+                })
+                addCorner(p, size)
+                
+                local dist = 0.15 + math.random() * 0.2
+                quickTween(p, 0.8 + math.random() * 0.4, {
+                    Position = UDim2.new(0.5 + math.cos(angle) * dist, 0, 0.3 + math.sin(angle) * dist, 0),
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 1, 0, 1),
+                }, Enum.EasingStyle.Quad)
+                task.delay(1.3, function() p:Destroy() end)
+            end
+        end)
     else
         hintFrame.Visible = true
         State._lastPos = mainFrame.Position
         State.mouseMode = false
+        playSound("close")
 
         tween(mainFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(1, 20, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset),
@@ -1793,12 +2133,14 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ------------------------------------------------------------------------
---  VISUAL EFFECTS LOOP
+--  VISUAL EFFECTS LOOP (ENHANCED)
 ------------------------------------------------------------------------
 local phase = 0
+local sweepTimer = 0
 
 RS.Heartbeat:Connect(function(dt)
     phase = phase + dt
+    sweepTimer = sweepTimer + dt
     rainbowHue = (rainbowHue + dt * 0.08) % 1
 
     if not State.visible then return end
@@ -1812,6 +2154,7 @@ RS.Heartbeat:Connect(function(dt)
         topGlare.BackgroundColor3 = c.glow
         fogA.BackgroundColor3 = c.fog
         fogB.BackgroundColor3 = c.fog
+        fogC.BackgroundColor3 = c.fog
         titleLabel.TextColor3 = c.accent
         titleTextStroke.Color = c.glow
         versionLabel.TextColor3 = c.accentDim
@@ -1823,30 +2166,80 @@ RS.Heartbeat:Connect(function(dt)
         itemsFrame.ScrollBarImageColor3 = c.border
         resizeStroke.Color = c.border
         resizeIcon.TextColor3 = c.glow
+        titleHalo.BackgroundColor3 = c.glow
+        for _, cb in ipairs(corners) do
+            cb.BackgroundColor3 = c.glow
+        end
     end
 
-    outerStroke.Transparency = 0.05 + math.sin(phase * 2.8) * 0.12
+    -- Border glow pulse (breathing)
+    local breathe = math.sin(phase * 2.0) * 0.5 + 0.5  -- 0..1 smooth
+    outerStroke.Transparency = 0.02 + breathe * 0.18
     if outerGlow then
-        outerGlow.Transparency = 0.82 + math.sin(phase * 3.2) * 0.1
+        outerGlow.Transparency = 0.78 + math.sin(phase * 2.5) * 0.12
     end
 
-    titleTextStroke.Transparency = 0.2 + math.sin(phase * 2.2) * 0.15
-    topGlare.BackgroundTransparency = 0.88 + math.sin(phase * 1.3) * 0.02
+    -- Title stroke shimmer
+    titleTextStroke.Transparency = 0.15 + math.sin(phase * 2.8) * 0.18
+    
+    -- Top glare pulse
+    topGlare.BackgroundTransparency = 0.87 + math.sin(phase * 1.5) * 0.025
 
+    -- Fog drift (three blobs with different orbits)
     local fogSpeed = 0.35
     fogA.Position = UDim2.new(
-        0.06 + math.sin(phase * fogSpeed) * 0.06, 0, 
-        0.06 + math.cos(phase * fogSpeed * 0.8) * 0.04, 0
+        0.06 + math.sin(phase * fogSpeed) * 0.07, 0, 
+        0.06 + math.cos(phase * fogSpeed * 0.8) * 0.05, 0
     )
     fogB.Position = UDim2.new(
-        0.35 - math.sin(phase * fogSpeed * 0.9) * 0.06, 0, 
-        0.45 - math.cos(phase * fogSpeed * 0.7) * 0.04, 0
+        0.35 - math.sin(phase * fogSpeed * 0.9) * 0.07, 0, 
+        0.45 - math.cos(phase * fogSpeed * 0.7) * 0.05, 0
     )
+    fogC.Position = UDim2.new(
+        0.5 + math.cos(phase * fogSpeed * 0.6) * 0.08, 0, 
+        0.25 + math.sin(phase * fogSpeed * 1.1) * 0.06, 0
+    )
+    -- Fog size breathing
+    local fogBreath = 0.02 * math.sin(phase * 0.8)
+    fogA.Size = UDim2.new(0.7 + fogBreath, 0, 0.7 + fogBreath, 0)
+    fogC.BackgroundTransparency = 0.94 + math.sin(phase * 1.2) * 0.02
 
-    innerStroke.Transparency = 0.62 + math.sin(phase * 3.5) * 0.08
-    subtitleBanner.BackgroundTransparency = 0.4 + math.sin(phase * 1.8) * 0.04
+    -- Inner border pulse
+    innerStroke.Transparency = 0.58 + math.sin(phase * 3.0) * 0.1
+    
+    -- Subtitle banner breathing
+    subtitleBanner.BackgroundTransparency = 0.38 + math.sin(phase * 2.0) * 0.05
 
+    -- ═══ Corner bracket pulse ═══
+    local cornerAlpha = 0.25 + math.sin(phase * 2.2) * 0.15
+    for _, cb in ipairs(corners) do
+        cb.BackgroundTransparency = cornerAlpha
+    end
+
+    -- ═══ Title halo breathing ═══
+    titleHalo.BackgroundTransparency = 0.90 + math.sin(phase * 1.6) * 0.04
+    titleHalo.BackgroundColor3 = c.glow
+
+    -- ═══ Light sweep across panel (every ~6 seconds) ═══
+    if sweepTimer > 6.0 then
+        sweepTimer = 0
+        lightSweep.Position = UDim2.new(-0.2, 0, 0, 0)
+        lightSweep.BackgroundTransparency = 0.95
+        quickTween(lightSweep, 1.8, {
+            Position = UDim2.new(1.1, 0, 0, 0),
+            BackgroundTransparency = 0.98,
+        }, Enum.EasingStyle.Sine)
+    end
+
+    -- ═══ Title underline animated width pulse ═══
+    titleLine.BackgroundTransparency = 0.3 + math.sin(phase * 2.5) * 0.1
+    local lineW = 0.46 + math.sin(phase * 1.2) * 0.03
+    titleLine.Size = UDim2.new(lineW, 0, 0, 1.8)
+    titleLine.Position = UDim2.new((1 - lineW) / 2, 0, 0, 52)
+
+    -- ═══ Chromatic glitch (original behavior preserved) ═══
     if State.glitchTitle then
+        -- Subtle micro-glitch
         if math.random() < 0.015 then
             local ox = (math.random() - 0.5) * 8
             local oy = (math.random() - 0.5) * 4
@@ -1861,6 +2254,7 @@ RS.Heartbeat:Connect(function(dt)
             end)
         end
 
+        -- Heavy glitch burst
         if math.random() < 0.003 then
             for i = 1, 4 do
                 local ox = (math.random() - 0.5) * 12
@@ -1873,14 +2267,28 @@ RS.Heartbeat:Connect(function(dt)
             glitchRed.TextTransparency = 1
             glitchGreen.TextTransparency = 1
         end
+        
+        -- Scanline flicker (brief horizontal offset)
+        if math.random() < 0.008 then
+            local shift = math.random(-3, 3)
+            titleLabel.Position = UDim2.new(0, shift, 0, 0)
+            task.delay(0.03, function()
+                titleLabel.Position = UDim2.new(0, 0, 0, 0)
+            end)
+        end
     end
-    
-    titleLine.BackgroundTransparency = 0.35 + math.sin(phase * 2.5) * 0.08
     
     -- Mouse mode indicator pulse
     if State.mouseMode and mouseModeIndicator.Visible then
         mouseModeIndicator.TextTransparency = 0.1 + math.sin(phase * 3) * 0.15
     end
+    
+    -- Status dot pulse (heartbeat-like)
+    local dotPulse = math.abs(math.sin(phase * 2.5))
+    statusDot.BackgroundTransparency = 0.05 + (1 - dotPulse) * 0.2
+    dotGlow.BackgroundTransparency = 0.6 + (1 - dotPulse) * 0.3
+    dotGlow.Size = UDim2.new(0, 12 + dotPulse * 4, 0, 12 + dotPulse * 4)
+    dotGlow.Position = UDim2.new(0, 5 - dotPulse * 2, 0.5, -6 - dotPulse * 2)
 end)
 
 task.spawn(function()
@@ -2001,8 +2409,93 @@ task.spawn(function()
     end
 end)
 
-------------------------------------------------------------------------
---  PUBLIC API
+-- Border sparkle particles (twinkle along edges)
+task.spawn(function()
+    while true do
+        task.wait(0.4 + math.random() * 0.8)
+        if not State.visible or not State.particles then continue end
+        local c = ct()
+        local ss = gui.AbsoluteSize
+        if ss.X < 1 then continue end
+        local mp = mainFrame.AbsolutePosition
+        local ms = mainFrame.AbsoluteSize
+        
+        -- Pick a random point along the border perimeter
+        local perim = (ms.X + ms.Y) * 2
+        local pos = math.random() * perim
+        local px, py
+        if pos < ms.X then
+            px, py = mp.X + pos, mp.Y -- top edge
+        elseif pos < ms.X + ms.Y then
+            px, py = mp.X + ms.X, mp.Y + (pos - ms.X) -- right edge
+        elseif pos < ms.X * 2 + ms.Y then
+            px, py = mp.X + ms.X - (pos - ms.X - ms.Y), mp.Y + ms.Y -- bottom edge
+        else
+            px, py = mp.X, mp.Y + ms.Y - (pos - ms.X * 2 - ms.Y) -- left edge
+        end
+        
+        local sx = px / ss.X
+        local sy = py / ss.Y
+        
+        -- Star-shaped sparkle (using a label with ✦)
+        local sparkle = makeLabel(particleFolder, {
+            Size = UDim2.new(0, 14, 0, 14),
+            Position = UDim2.new(sx, -7, sy, -7),
+            TextSize = math.random(8, 14),
+            TextColor3 = c.accent,
+            TextTransparency = 0.2,
+            Text = "✦",
+            ZIndex = 6,
+        })
+        
+        -- Quick flash: pop in, hold, fade out
+        quickTween(sparkle, 0.15, { TextSize = math.random(10, 16) }, Enum.EasingStyle.Back)
+        task.delay(0.15, function()
+            if sparkle.Parent then
+                quickTween(sparkle, 0.4 + math.random() * 0.3, {
+                    TextTransparency = 1,
+                    TextSize = 4,
+                    Rotation = math.random(-90, 90),
+                })
+            end
+        end)
+        task.delay(0.9, function() sparkle:Destroy() end)
+    end
+end)
+
+-- Floating diamond particles (inside panel, slow drift)
+task.spawn(function()
+    while true do
+        task.wait(1.2 + math.random() * 2.0)
+        if not State.visible or not State.particles then continue end
+        local c = ct()
+        
+        local sparkle = makeLabel(mainFrame, {
+            Size = UDim2.new(0, 12, 0, 12),
+            Position = UDim2.new(math.random() * 0.9 + 0.05, 0, math.random() * 0.8 + 0.1, 0),
+            TextSize = math.random(6, 10),
+            TextColor3 = c.glow,
+            TextTransparency = 0.5,
+            Text = "◆",
+            ZIndex = 15,
+            Rotation = 0,
+        })
+        
+        local dur = 2.0 + math.random() * 3.0
+        quickTween(sparkle, dur, {
+            TextTransparency = 1,
+            TextSize = 3,
+            Position = UDim2.new(
+                sparkle.Position.X.Scale + (math.random() - 0.5) * 0.1,
+                0,
+                sparkle.Position.Y.Scale - 0.08,
+                0
+            ),
+            Rotation = (math.random() - 0.5) * 120,
+        }, Enum.EasingStyle.Sine)
+        task.delay(dur + 0.1, function() sparkle:Destroy() end)
+    end
+end)
 ------------------------------------------------------------------------
 local Library = {}
 Library.__index = Library
