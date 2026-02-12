@@ -40,11 +40,12 @@
     end)
     
     CONTROLS:
-      [       Open / Close menu
-      W / S   Scroll up / down (wraps)
-      A / D   Slider adjust / Dropdown cycle
-      F/SPACE Select / Toggle / Activate
-      X       Back / Close
+      LEFT ALT  Open / Close menu
+      W / S     Scroll up / down (wraps)
+      A / D     Slider adjust / Dropdown cycle
+      F/SPACE   Select / Toggle / Activate
+      X         Back / Close
+      V         Toggle Mouse Mode (free movement + click to select)
       Drag titlebar to move. Drag corner to resize.
 --]]
 
@@ -55,6 +56,7 @@ local CAS           = game:GetService("ContextActionService")
 local TS            = game:GetService("TweenService")
 local RS            = game:GetService("RunService")
 local SoundService  = game:GetService("SoundService")
+local GuiService    = game:GetService("GuiService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -171,7 +173,6 @@ local THEMES = {
     },
     {
         name = "RAINBOW",
-        -- These are placeholder values; ct() generates dynamic colors when this theme is active
         border = Color3.fromRGB(255, 80, 80),
         glow = Color3.fromRGB(255, 100, 100),
         accent = Color3.fromRGB(255, 220, 220),
@@ -205,7 +206,7 @@ local State = {
     opacity = 80,
 
     -- Navigation
-    currentView = "home",    -- "home" or page id
+    currentView = "home",
     sel = 1,
     stack = {},
 
@@ -219,12 +220,14 @@ local State = {
     -- Window info
     title = "SPOOKALICIOUS",
     version = "V4",
+
+    -- Mouse mode: V key toggles this. When true, keys pass to game, mouse clicks on GUI only
+    mouseMode = false,
 }
 
--- ✨ Make State globally accessible for addons
 _G.State = State
 
-local rainbowHue = 0 -- Updated in Heartbeat
+local rainbowHue = 0
 
 local function hsvToRgb(h, s, v)
     return Color3.fromHSV(h % 1, s, v)
@@ -234,7 +237,6 @@ local function ct()
     local base = THEMES[State.colorIdx]
     if base.name ~= "RAINBOW" then return base end
 
-    -- Generate dynamic rainbow theme from current hue
     local h = rainbowHue
     local border   = hsvToRgb(h, 0.7, 0.85)
     local glow     = hsvToRgb(h, 0.6, 1.0)
@@ -273,26 +275,30 @@ local DEFAULT_STATE = {
 }
 
 ------------------------------------------------------------------------
---  ✨ RIPPLE CLICK EFFECT
+--  RIPPLE CLICK EFFECT
 ------------------------------------------------------------------------
 local function createRipple(parent, posX, posY)
     if not State.particles then return end
     local c = ct()
     
-    local ripple = makeFrame(parent, {
-        Size = UDim2.new(0, 0, 0, 0),
-        Position = UDim2.new(0, posX, 0, posY),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = c.glow,
-        BackgroundTransparency = 0.3,
-        ZIndex = 100,
-    })
-    addCorner(ripple, 200)
+    local ripple = Instance.new("Frame")
+    ripple.BorderSizePixel = 0
+    ripple.Size = UDim2.new(0, 0, 0, 0)
+    ripple.Position = UDim2.new(0, posX, 0, posY)
+    ripple.AnchorPoint = Vector2.new(0.5, 0.5)
+    ripple.BackgroundColor3 = c.glow
+    ripple.BackgroundTransparency = 0.3
+    ripple.ZIndex = 100
+    ripple.Parent = parent
     
-    quickTween(ripple, 0.6, {
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 200)
+    corner.Parent = ripple
+    
+    TS:Create(ripple, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         Size = UDim2.new(0, 120, 0, 120),
         BackgroundTransparency = 1,
-    })
+    }):Play()
     
     task.delay(0.65, function() ripple:Destroy() end)
 end
@@ -367,7 +373,7 @@ local function makeFrame(parent, props)
 end
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED SOUND SYSTEM WITH VARIATIONS
+--  ENHANCED SOUND SYSTEM
 ------------------------------------------------------------------------
 local sounds = {}
 local function createSnd(vol, pitch, id)
@@ -379,7 +385,6 @@ local function createSnd(vol, pitch, id)
     return s
 end
 
--- Multiple variations for richer audio feedback
 sounds.nav    = {createSnd(0.12, 1.4), createSnd(0.12, 1.5), createSnd(0.12, 1.3)}
 sounds.select = {createSnd(0.22, 1.0), createSnd(0.22, 1.1)}
 sounds.back   = createSnd(0.18, 0.7)
@@ -392,18 +397,17 @@ sounds.success = createSnd(0.14, 1.5)
 local function playSound(name)
     if not State.sounds then return end
     local s = sounds[name]
-    -- Pick random variation if table
     if type(s) == "table" then
         s = s[math.random(1, #s)]
     end
     if s then 
-        s.PlaybackSpeed = s.PlaybackSpeed + (math.random() - 0.5) * 0.1 -- Slight pitch variation
+        s.PlaybackSpeed = s.PlaybackSpeed + (math.random() - 0.5) * 0.1
         s:Stop(); s:Play() 
     end
 end
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED TOAST SYSTEM WITH ICONS & ANIMATIONS
+--  TOAST SYSTEM
 ------------------------------------------------------------------------
 local toastContainer = makeFrame(gui, {
     Name = "Toasts",
@@ -429,7 +433,6 @@ local function repositionToasts()
 end
 
 local function showToast(msg)
-    -- Remove oldest if at max
     if #activeToasts >= MAX_TOASTS then
         local oldest = table.remove(activeToasts, 1)
         if oldest and oldest.frame then
@@ -447,7 +450,7 @@ local function showToast(msg)
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 0, TOAST_H)
-    frame.Position = UDim2.new(1, 40, 1, 0) -- start offscreen
+    frame.Position = UDim2.new(1, 40, 1, 0)
     frame.BackgroundColor3 = c.bg
     frame.BackgroundTransparency = 0.04
     frame.BorderSizePixel = 0
@@ -457,7 +460,6 @@ local function showToast(msg)
     addCorner(frame, 5)
     local stroke = addStroke(frame, c.border, 1.5, 0.25)
     
-    -- Pulsing glow effect on stroke
     task.spawn(function()
         for i = 1, 8 do
             if not frame.Parent then break end
@@ -468,7 +470,6 @@ local function showToast(msg)
         end
     end)
 
-    -- Icon
     local icon = makeLabel(frame, {
         Size = UDim2.new(0, 22, 1, 0),
         Position = UDim2.new(0, 6, 0, 0),
@@ -478,15 +479,11 @@ local function showToast(msg)
         ZIndex = 84,
     })
     
-    -- Animate icon with pulse
     quickTween(icon, 0.3, { TextSize = 18 }, Enum.EasingStyle.Back)
     task.delay(0.3, function()
-        if icon.Parent then
-            quickTween(icon, 0.2, { TextSize = 16 })
-        end
+        if icon.Parent then quickTween(icon, 0.2, { TextSize = 16 }) end
     end)
 
-    -- Left accent bar with expand animation
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(0, 0, 0.7, 0)
     bar.Position = UDim2.new(0, 3, 0.15, 0)
@@ -497,7 +494,6 @@ local function showToast(msg)
     bar.Parent = frame
     addCorner(bar, 2)
     
-    -- Animate bar expanding
     quickTween(bar, 0.4, {
         Size = UDim2.new(0, 3, 0.7, 0)
     }, Enum.EasingStyle.Back)
@@ -517,12 +513,10 @@ local function showToast(msg)
     table.insert(activeToasts, entry)
     repositionToasts()
 
-    -- Slide in with spring effect
     quickTween(frame, 0.4, {
         Position = UDim2.new(0, 0, 1, -(#activeToasts * (TOAST_H + TOAST_GAP)) - 10)
     }, Enum.EasingStyle.Back)
 
-    -- Auto remove with slide out
     task.delay(TOAST_DURATION, function()
         quickTween(frame, 0.25, { 
             Position = UDim2.new(1, 40, frame.Position.Y.Scale, frame.Position.Y.Offset),
@@ -546,7 +540,7 @@ local function showToast(msg)
 end
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED HINT LABEL WITH GLOW
+--  HINT LABEL
 ------------------------------------------------------------------------
 local hintFrame = Instance.new("Frame")
 hintFrame.Size = UDim2.new(0, 350, 0, 42)
@@ -559,7 +553,6 @@ hintFrame.Parent = gui
 addCorner(hintFrame, 6)
 local hintStroke = addStroke(hintFrame, ct().border, 1.8, 0.3)
 
--- ✨ Animated accent bar
 local hintBar = Instance.new("Frame")
 hintBar.Size = UDim2.new(0, 4, 0.68, 0)
 hintBar.Position = UDim2.new(0, 6, 0.16, 0)
@@ -580,15 +573,11 @@ local hintLabel = makeLabel(hintFrame, {
 })
 addStroke(hintLabel, Color3.fromRGB(50, 18, 90), 1.2, 0.25, Enum.ApplyStrokeMode.Contextual)
 
--- ✨ Enhanced multi-layer pulse animation
 task.spawn(function()
     while true do
         if hintFrame.Visible then
-            -- Text pulse
             tween(hintLabel, TweenInfo.new(2.0, Enum.EasingStyle.Sine), { TextTransparency = 0.35 })
-            -- Bar pulse
             tween(hintBar, TweenInfo.new(2.0, Enum.EasingStyle.Sine), { BackgroundTransparency = 0.25 })
-            -- Stroke glow
             tween(hintStroke, TweenInfo.new(2.0, Enum.EasingStyle.Sine), { Transparency = 0.5 })
             task.wait(2.0)
             tween(hintLabel, TweenInfo.new(2.0, Enum.EasingStyle.Sine), { TextTransparency = 0 })
@@ -600,7 +589,7 @@ task.spawn(function()
 end)
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED MAIN PANEL WITH PREMIUM STYLING
+--  MAIN PANEL
 ------------------------------------------------------------------------
 local MENU_W = 360
 local MENU_MIN_W, MENU_MAX_W = 280, 520
@@ -619,11 +608,8 @@ mainFrame.Parent = gui
 addCorner(mainFrame, 8)
 
 local outerStroke = addStroke(mainFrame, ct().border, 2.5, 0.05)
-
--- ✨ Secondary outer glow
 local outerGlow = addStroke(mainFrame, ct().glow, 4, 0.85)
 
--- Inner border
 local innerBorder = makeFrame(mainFrame, {
     Size = UDim2.new(1, -14, 1, -14),
     Position = UDim2.new(0, 7, 0, 7),
@@ -633,7 +619,6 @@ local innerBorder = makeFrame(mainFrame, {
 local innerStroke = addStroke(innerBorder, ct().border, 1.2, 0.65)
 addCorner(innerBorder, 6)
 
--- ✨ Enhanced top glare with gradient
 local topGlare = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 0, 130),
     BackgroundColor3 = ct().glow,
@@ -646,7 +631,6 @@ addGradient(topGlare, NumberSequence.new({
     NumberSequenceKeypoint.new(1, 1),
 }), 90)
 
--- ✨ Enhanced bottom vignette
 local botVig = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 0, 80),
     Position = UDim2.new(0, 0, 1, -80),
@@ -660,7 +644,6 @@ addGradient(botVig, NumberSequence.new({
     NumberSequenceKeypoint.new(1, 0),
 }), 90)
 
--- ✨ Larger fog blobs with better positioning
 local fogA = makeFrame(mainFrame, {
     Size = UDim2.new(0.7, 0, 0.7, 0),
     Position = UDim2.new(0.06, 0, 0.06, 0),
@@ -679,7 +662,6 @@ local fogB = makeFrame(mainFrame, {
 })
 addCorner(fogB, 100)
 
--- Scanlines
 local scanlineOverlay = makeFrame(mainFrame, {
     Name = "Scanlines",
     Size = UDim2.new(1, 0, 1, 0),
@@ -689,7 +671,7 @@ local scanlineOverlay = makeFrame(mainFrame, {
 })
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED TITLE AREA WITH PREMIUM STYLING
+--  TITLE AREA
 ------------------------------------------------------------------------
 local titleRegion = makeFrame(mainFrame, {
     Name = "TitleRegion",
@@ -709,7 +691,6 @@ local titleLabel = makeLabel(titleRegion, {
 })
 local titleTextStroke = addStroke(titleLabel, ct().glow, 2.0, 0.2, Enum.ApplyStrokeMode.Contextual)
 
--- ✨ Enhanced glitch clones with better visibility
 local glitchRed = makeLabel(titleRegion, {
     Name = "GR", Size = UDim2.new(1,0,0,35), Position = UDim2.new(0,0,0,0),
     TextSize = 26, TextColor3 = Color3.fromRGB(255,30,80),
@@ -723,11 +704,10 @@ local glitchGreen = makeLabel(titleRegion, {
 
 local versionLabel = makeLabel(titleRegion, {
     Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,0,35),
-    TextSize = 14, TextColor3 = ct().accentDim, Text = "V4 ✨ ENHANCED", ZIndex = 22,
+    TextSize = 14, TextColor3 = ct().accentDim, Text = "V4", ZIndex = 22,
 })
 addStroke(versionLabel, ct().border, 1.0, 0.45, Enum.ApplyStrokeMode.Contextual)
 
--- ✨ Enhanced title underline with glow
 local titleLine = makeFrame(titleRegion, {
     Size = UDim2.new(0.46, 0, 0, 1.8),
     Position = UDim2.new(0.27, 0, 0, 52),
@@ -737,7 +717,6 @@ local titleLine = makeFrame(titleRegion, {
 })
 addCorner(titleLine, 1)
 
--- Drag button on title
 local dragBtn = Instance.new("TextButton")
 dragBtn.Size = UDim2.new(1, 0, 1, 0)
 dragBtn.BackgroundTransparency = 1
@@ -746,7 +725,7 @@ dragBtn.ZIndex = 23
 dragBtn.Parent = titleRegion
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED SUBTITLE BANNER
+--  SUBTITLE BANNER
 ------------------------------------------------------------------------
 local subY = 68
 
@@ -772,7 +751,6 @@ local subtitleLabel = makeLabel(subtitleBanner, {
 })
 addStroke(subtitleLabel, ct().bg, 1.3, 0.2, Enum.ApplyStrokeMode.Contextual)
 
--- ✨ Enhanced top separator with gradient
 local topSep = makeFrame(mainFrame, {
     Size = UDim2.new(1, -28, 0, 1.5),
     Position = UDim2.new(0, 14, 0, subY + 34),
@@ -808,7 +786,7 @@ itemsFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
 itemsFrame.Parent = mainFrame
 
 ------------------------------------------------------------------------
---  BOTTOM SEP + FOOTER
+--  BOTTOM SEP + FOOTER (FIX 1: wider footer, smaller text, shorter labels)
 ------------------------------------------------------------------------
 local botSep = makeFrame(mainFrame, {
     Size = UDim2.new(1, -28, 0, 1),
@@ -825,12 +803,30 @@ addGradient(botSep, NumberSequence.new({
 
 local footerLabel = makeLabel(mainFrame, {
     Name = "Footer",
-    Size = UDim2.new(1, -12, 0, 28),
-    TextSize = 11,
+    Size = UDim2.new(1, -4, 0, 28),  -- FIX: wider (less padding)
+    Position = UDim2.new(0, 2, 0, 0),
+    TextSize = 10,                     -- FIX: smaller text to fit
     TextColor3 = Color3.fromRGB(100, 70, 140),
+    TextXAlignment = Enum.TextXAlignment.Center,
     ZIndex = 22,
+    TextTruncate = Enum.TextTruncate.None,
 })
 addStroke(footerLabel, Color3.fromRGB(35, 12, 60), 0.7, 0.5, Enum.ApplyStrokeMode.Contextual)
+
+------------------------------------------------------------------------
+--  MOUSE MODE INDICATOR (shows when V mouse mode is active)
+------------------------------------------------------------------------
+local mouseModeIndicator = makeLabel(mainFrame, {
+    Name = "MouseModeIndicator",
+    Size = UDim2.new(0, 120, 0, 18),
+    Position = UDim2.new(0.5, -60, 0, 0),
+    TextSize = 11,
+    TextColor3 = Color3.fromRGB(80, 255, 144),
+    Text = "MOUSE MODE",
+    ZIndex = 50,
+    Visible = false,
+})
+addStroke(mouseModeIndicator, Color3.fromRGB(0, 0, 0), 1, 0.3, Enum.ApplyStrokeMode.Contextual)
 
 ------------------------------------------------------------------------
 --  RESIZE HANDLE
@@ -847,7 +843,6 @@ resizeHandle.Parent = mainFrame
 addCorner(resizeHandle, 4)
 local resizeStroke = addStroke(resizeHandle, ct().border, 1, 0.45)
 
--- Diagonal grip lines
 local resizeIcon = makeLabel(resizeHandle, {
     Size = UDim2.new(1, 0, 1, 0),
     Text = "///",
@@ -859,7 +854,6 @@ local resizeIcon = makeLabel(resizeHandle, {
 })
 addStroke(resizeIcon, ct().bg, 0.6, 0.5, Enum.ApplyStrokeMode.Contextual)
 
--- Hover glow
 resizeHandle.MouseEnter:Connect(function()
     quickTween(resizeHandle, 0.15, { BackgroundTransparency = 0.1 })
     quickTween(resizeStroke, 0.15, { Transparency = 0.15 })
@@ -923,7 +917,7 @@ do
 end
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED ELEMENT HEIGHT CONSTANTS
+--  ELEMENT HEIGHT CONSTANTS
 ------------------------------------------------------------------------
 local H_ITEM    = 40
 local H_SLIDER  = 60
@@ -975,17 +969,15 @@ local function createItemUI(index, item, yPos)
     })
     addCorner(frame, 3)
 
-    -- Selection highlight + animated bars
     if sel then
-        -- Animate background highlight in
         frame.BackgroundTransparency = 1
         quickTween(frame, 0.25, { BackgroundTransparency = 0.87 })
 
         for _, side in ipairs({"left","right"}) do
             local bar = makeFrame(frame, {
-                Size = UDim2.new(0, 2, 0, 0),  -- start collapsed
+                Size = UDim2.new(0, 2, 0, 0),
                 Position = side == "left"
-                    and UDim2.new(0, 2, 0.5, 0)     -- start centered
+                    and UDim2.new(0, 2, 0.5, 0)
                     or UDim2.new(1, -4, 0.5, 0),
                 AnchorPoint = Vector2.new(0, 0.5),
                 BackgroundColor3 = c.glow,
@@ -994,7 +986,6 @@ local function createItemUI(index, item, yPos)
             })
             addCorner(bar, 1)
 
-            -- Animate bar expanding + fading in
             quickTween(bar, 0.3, {
                 Size = UDim2.new(0, 2, 0.6, 0),
                 BackgroundTransparency = 0.05,
@@ -1002,16 +993,16 @@ local function createItemUI(index, item, yPos)
         end
     end
 
-    -- ── SECTION HEADER ──
+    -- SECTION HEADER
     if item.type == "section_header" then
-        local sep1 = makeFrame(frame, {
+        makeFrame(frame, {
             Size = UDim2.new(0.2, 0, 0, 1),
             Position = UDim2.new(0, 14, 0.5, 0),
             BackgroundColor3 = c.sectionColor,
             BackgroundTransparency = 0.5,
             ZIndex = 27,
         })
-        local sep2 = makeFrame(frame, {
+        makeFrame(frame, {
             Size = UDim2.new(0.2, 0, 0, 1),
             Position = UDim2.new(0.8, -14, 0.5, 0),
             BackgroundColor3 = c.sectionColor,
@@ -1027,7 +1018,6 @@ local function createItemUI(index, item, yPos)
             ZIndex = 27,
         })
 
-    -- ── PAGE LINK ──
     elseif item.type == "page_link" then
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
@@ -1039,7 +1029,6 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── TOGGLE ──
     elseif item.type == "toggle" then
         local on = item.value
         local clr = on and string.format("#%02x%02x%02x", c.onColor.R*255, c.onColor.G*255, c.onColor.B*255)
@@ -1055,7 +1044,6 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── SLIDER (mouse draggable + A/D) ──
     elseif item.type == "slider" then
         local val = item.value
         local pct = math.clamp((val - item.min) / (item.max - item.min), 0, 1)
@@ -1069,7 +1057,6 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.25 or 0.55, Enum.ApplyStrokeMode.Contextual)
 
-        -- Track (taller hit area)
         local trackWrap = makeFrame(frame, {
             Size = UDim2.new(1, -34, 0, 18),
             Position = UDim2.new(0, 17, 0, 20),
@@ -1095,7 +1082,6 @@ local function createItemUI(index, item, yPos)
         })
         addCorner(fill, 3)
 
-        -- Thumb dot
         local thumbSize = sel and 14 or 10
         local thumb = makeFrame(trackWrap, {
             Size = UDim2.new(0, thumbSize, 0, thumbSize),
@@ -1105,18 +1091,15 @@ local function createItemUI(index, item, yPos)
             ZIndex = 30,
         })
         addCorner(thumb, thumbSize)
-        if sel then
-            addStroke(thumb, c.accent, 1, 0.3)
-        end
+        if sel then addStroke(thumb, c.accent, 1, 0.3) end
 
-        -- Mouse drag handler
-        local dragBtn = Instance.new("TextButton")
-        dragBtn.Size = UDim2.new(1, 10, 1, 6)
-        dragBtn.Position = UDim2.new(0, -5, 0, -3)
-        dragBtn.BackgroundTransparency = 1
-        dragBtn.Text = ""
-        dragBtn.ZIndex = 33
-        dragBtn.Parent = trackWrap
+        local sliderBtn = Instance.new("TextButton")
+        sliderBtn.Size = UDim2.new(1, 10, 1, 6)
+        sliderBtn.Position = UDim2.new(0, -5, 0, -3)
+        sliderBtn.BackgroundTransparency = 1
+        sliderBtn.Text = ""
+        sliderBtn.ZIndex = 33
+        sliderBtn.Parent = trackWrap
 
         local sliderDragging = false
         local dragMoveConn, dragEndConn
@@ -1129,7 +1112,6 @@ local function createItemUI(index, item, yPos)
             local relX = math.clamp((inputX - trackAbsPos) / trackAbsSize, 0, 1)
             local rawVal = item.min + relX * (item.max - item.min)
 
-            -- Snap to step
             local step = item.step or 1
             local snapped = math.floor((rawVal - item.min) / step + 0.5) * step + item.min
             snapped = math.clamp(snapped, item.min, item.max)
@@ -1139,7 +1121,6 @@ local function createItemUI(index, item, yPos)
                 playSound("slider")
                 if item.callback then item.callback(snapped) end
 
-                -- Update fill and thumb live without full re-render
                 local newPct = math.clamp((snapped - item.min) / (item.max - item.min), 0, 1)
                 fill.Size = UDim2.new(newPct, 0, 1, 0)
                 thumb.Position = UDim2.new(newPct, -thumbSize/2, 0.5, -thumbSize/2)
@@ -1147,7 +1128,7 @@ local function createItemUI(index, item, yPos)
             end
         end
 
-        dragBtn.InputBegan:Connect(function(input)
+        sliderBtn.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 sliderDragging = true
                 State.sel = index
@@ -1171,7 +1152,6 @@ local function createItemUI(index, item, yPos)
             end
         end)
 
-        -- A/D hint
         if sel then
             makeLabel(frame, {
                 Size = UDim2.new(1, 0, 0, 12),
@@ -1183,7 +1163,6 @@ local function createItemUI(index, item, yPos)
             })
         end
 
-    -- ── BUTTON ──
     elseif item.type == "button" then
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -14, 1, 0),
@@ -1195,7 +1174,6 @@ local function createItemUI(index, item, yPos)
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
 
-    -- ── TEXTBOX ──
     elseif item.type == "textbox" then
         makeLabel(frame, {
             Size = UDim2.new(1, 0, 0, 16),
@@ -1235,7 +1213,6 @@ local function createItemUI(index, item, yPos)
             if item.callback then item.callback(tb.Text) end
         end)
 
-    -- ── DROPDOWN ──
     elseif item.type == "dropdown" then
         local current = item.value or item.default or "None"
 
@@ -1261,7 +1238,7 @@ local function createItemUI(index, item, yPos)
                 })
                 addCorner(optFrame, 2)
 
-                local optLbl = makeLabel(optFrame, {
+                makeLabel(optFrame, {
                     Size = UDim2.new(1, -10, 1, 0),
                     Position = UDim2.new(0, 5, 0, 0),
                     TextSize = 13,
@@ -1287,7 +1264,6 @@ local function createItemUI(index, item, yPos)
             end
         end
 
-    -- ── KEYBIND ──
     elseif item.type == "keybind" then
         local keyName = item.value and item.value.Name or "None"
         if item._listening then keyName = "..." end
@@ -1303,7 +1279,7 @@ local function createItemUI(index, item, yPos)
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
     end
 
-    -- Click zone
+    -- Click zone (always works, even in mouse mode)
     if item.type ~= "textbox" then
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, math.min(h, H_DROP))
@@ -1313,14 +1289,13 @@ local function createItemUI(index, item, yPos)
         btn.Parent = frame
         btn.MouseButton1Click:Connect(function()
             State.sel = index
-            -- ✨ Add ripple effect on click
             local mousePos = UIS:GetMouseLocation()
             local framePos = frame.AbsolutePosition
             createRipple(frame, mousePos.X - framePos.X, mousePos.Y - framePos.Y)
             doSelect()
         end)
         btn.MouseEnter:Connect(function()
-            playSound("hover") -- ✨ Add hover sound
+            playSound("hover")
             if State.sel ~= index then
                 State.sel = index
                 renderView()
@@ -1338,7 +1313,6 @@ local function buildFlatItems()
     State.flatItems = {}
 
     if State.currentView == "home" then
-        -- Show page links + settings
         for _, pageId in ipairs(State.pageOrder) do
             local pg = State.pages[pageId]
             table.insert(State.flatItems, {
@@ -1347,14 +1321,12 @@ local function buildFlatItems()
                 pageId = pageId,
             })
         end
-        -- Built-in settings as a page link
         table.insert(State.flatItems, {
             type = "page_link",
             label = "Settings",
             pageId = "__settings__",
         })
     elseif State.currentView == "__settings__" then
-        -- Show settings page
         table.insert(State.flatItems, { type = "section_header", label = "Menu Settings" })
         table.insert(State.flatItems, { type = "button", label = "Menu Color", callback = function()
             State.colorIdx = (State.colorIdx % #THEMES) + 1
@@ -1366,7 +1338,6 @@ local function buildFlatItems()
         table.insert(State.flatItems, { type = "toggle", label = "Scanlines", value = State.scanlines, callback = function(v) State.scanlines = v end })
         table.insert(State.flatItems, { type = "toggle", label = "Glitch Title", value = State.glitchTitle, callback = function(v) State.glitchTitle = v end })
     else
-        -- Show page contents
         local pg = State.pages[State.currentView]
         if pg then
             for _, sec in ipairs(pg.sections) do
@@ -1391,7 +1362,6 @@ function renderView()
 
     State.sel = math.clamp(State.sel, 1, #items)
 
-    -- Skip section headers
     while items[State.sel] and items[State.sel].type == "section_header" do
         State.sel = State.sel + 1
         if State.sel > #items then State.sel = 1 end
@@ -1409,17 +1379,22 @@ function renderView()
         subtitleLabel.Text = pg and (utf8.char(0x1F383) .. " " .. string.upper(pg.name) .. " " .. utf8.char(0x1F383)) or "---"
     end
 
-    -- Footer
+    -- FIX 1: Shortened footer text that fits without getting cut off
     local bk = #State.stack > 0 and "BACK" or "CLOSE"
+    local modeTag = State.mouseMode and ' <font color="#50ff90">V:MOUSE</font>' or ' <font color="#ffaa40">V</font>:Mouse'
     footerLabel.Text = string.format(
-        '<font color="#50ff90">ALT</font> TOGGLE   '..
-        '<font color="#ffaa40">W/S</font> SCROLL   '..
-        '<font color="#ffaa40">A/D</font> ADJUST   '..
-        '<font color="#d8a0ff">F/SPACE</font> SELECT   '..
-        '<font color="#ff4070">X</font> %s', bk
+        '<font color="#50ff90">ALT</font>Open '..
+        '<font color="#ffaa40">W/S</font>Nav '..
+        '<font color="#ffaa40">A/D</font>Adj '..
+        '<font color="#d8a0ff">F</font>Sel '..
+        '<font color="#ff4070">X</font>%s'..
+        '%s', bk, modeTag
     )
 
-    -- Render items with ✨ staggered animation
+    -- Mouse mode indicator
+    mouseModeIndicator.Visible = State.mouseMode
+
+    -- Render items
     local totalH = 0
     for i, item in ipairs(items) do
         local h = getItemHeight(item)
@@ -1446,7 +1421,7 @@ function renderView()
     mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, totalFrameH)
 
     botSep.Position = UDim2.new(0, 14, 0, itemsY + itemsH + 4)
-    footerLabel.Position = UDim2.new(0, 6, 0, itemsY + itemsH + 8)
+    footerLabel.Position = UDim2.new(0, 2, 0, itemsY + itemsH + 8)
 
     -- Theme colors
     outerStroke.Color = c.border
@@ -1476,7 +1451,6 @@ function renderView()
     mainFrame.BackgroundTransparency = 1 - (State.opacity / 100)
 end
 
--- ✨ Make renderView globally accessible for addons
 _G.SpookyRenderView = renderView
 
 ------------------------------------------------------------------------
@@ -1517,7 +1491,6 @@ function doSelect()
         showToast("Press any key...")
         renderView()
 
-        -- Wait for next key press
         local conn
         conn = UIS.InputBegan:Connect(function(input, gp)
             if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1534,9 +1507,6 @@ function doSelect()
                 renderView()
             end
         end)
-
-    elseif item.type == "slider" then
-        -- F does nothing on sliders, use A/D
     end
 end
 
@@ -1565,7 +1535,6 @@ function doSliderAdjust(dir)
             renderView()
         end
     elseif item.type == "dropdown" and not item._expanded then
-        -- Cycle through dropdown with A/D
         playSound("nav")
         local idx = 1
         for i, v in ipairs(item.list) do
@@ -1582,6 +1551,28 @@ function doSliderAdjust(dir)
 end
 
 ------------------------------------------------------------------------
+--  FIX 3: MOUSE MODE TOGGLE (V KEY)
+--  When active: unbinds keyboard sink so you can move freely in game.
+--  Menu stays visible and clickable with mouse only.
+--  Press V again or ALT to go back to keyboard mode / close.
+------------------------------------------------------------------------
+local function enableMouseMode()
+    State.mouseMode = true
+    unbindKeys()  -- release all keyboard sinks so game gets input
+    showToast("Mouse Mode ON - click to select, V to exit")
+    renderView()
+end
+
+local function disableMouseMode()
+    State.mouseMode = false
+    if State.visible then
+        bindKeys()  -- re-bind keyboard sink
+    end
+    showToast("Mouse Mode OFF - keyboard controls active")
+    renderView()
+end
+
+------------------------------------------------------------------------
 --  OPEN / CLOSE
 ------------------------------------------------------------------------
 function toggleMenu(show)
@@ -1590,17 +1581,15 @@ function toggleMenu(show)
         State.currentView = "home"
         State.sel = 1
         State.stack = {}
+        State.mouseMode = false  -- always start in keyboard mode
         renderView()
 
         mainFrame.Visible = true
         hintFrame.Visible = false
 
-        -- Calculate proper right-side position
         local menuW = mainFrame.Size.X.Offset
         local menuH = mainFrame.Size.Y.Offset
-        local screenW = gui.AbsoluteSize.X
 
-        -- If menu was dragged somewhere, keep that position; otherwise default to right side
         local targetPos
         if State._userDragged then
             targetPos = State._lastPos
@@ -1608,16 +1597,13 @@ function toggleMenu(show)
             targetPos = UDim2.new(1, -menuW - 16, 0.5, -menuH / 2)
         end
 
-        -- Start offscreen right, slide in
         mainFrame.Position = UDim2.new(1, 20, targetPos.Y.Scale, targetPos.Y.Offset)
 
-        -- ✨ Enhanced opening animation with subtle shake
         tween(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Position = targetPos,
             BackgroundTransparency = 1 - (State.opacity / 100),
         })
         
-        -- ✨ Subtle screen shake effect
         task.spawn(function()
             task.wait(0.35)
             for i = 1, 3 do
@@ -1637,6 +1623,7 @@ function toggleMenu(show)
     else
         hintFrame.Visible = true
         State._lastPos = mainFrame.Position
+        State.mouseMode = false
 
         tween(mainFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(1, 20, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset),
@@ -1649,7 +1636,9 @@ function toggleMenu(show)
 end
 
 ------------------------------------------------------------------------
---  INPUT SINKING
+--  FIX 2: PROPER INPUT SINKING (keys do NOT pass to game)
+--  Uses BindActionAtPriority with max priority so the game never sees
+--  our keys. Also handles V key for mouse mode toggle.
 ------------------------------------------------------------------------
 local SINK = "SpookaliciousV4Sink"
 local BLOCKED = {
@@ -1664,6 +1653,7 @@ local BLOCKED = {
     Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six,
     Enum.KeyCode.Seven, Enum.KeyCode.Eight, Enum.KeyCode.Nine, Enum.KeyCode.Zero,
     Enum.KeyCode.Escape,
+    Enum.KeyCode.LeftAlt, -- Also sink ALT so game doesn't see it
 }
 
 local heldKeys = {}
@@ -1671,10 +1661,24 @@ local REPEAT_DELAY = 0.32
 local REPEAT_RATE = 0.055
 
 function bindKeys()
-    CAS:BindAction(SINK, function(_, inputState, inputObj)
+    -- FIX 2: Use BindActionAtPriority with very high priority (10000)
+    -- This ensures the game NEVER receives these keys while menu is open
+    CAS:BindActionAtPriority(SINK, function(_, inputState, inputObj)
         local k = inputObj.KeyCode
         if inputState == Enum.UserInputState.Begin then
             heldKeys[k] = tick()
+
+            -- ALT toggles menu closed
+            if k == Enum.KeyCode.LeftAlt then
+                toggleMenu(false)
+                return Enum.ContextActionResult.Sink
+            end
+
+            -- V toggles mouse mode
+            if k == Enum.KeyCode.V then
+                enableMouseMode()
+                return Enum.ContextActionResult.Sink
+            end
 
             local items = State.flatItems
             local count = #items
@@ -1683,7 +1687,6 @@ function bindKeys()
                 playSound("nav")
                 State.sel = State.sel - 1
                 if State.sel < 1 then State.sel = count end
-                -- Skip section headers
                 while items[State.sel] and items[State.sel].type == "section_header" do
                     State.sel = State.sel - 1
                     if State.sel < 1 then State.sel = count end
@@ -1710,8 +1713,8 @@ function bindKeys()
         elseif inputState == Enum.UserInputState.End then
             heldKeys[k] = nil
         end
-        return Enum.ContextActionResult.Sink
-    end, false, unpack(BLOCKED))
+        return Enum.ContextActionResult.Sink  -- ALWAYS sink, never pass to game
+    end, false, 10000, unpack(BLOCKED))  -- priority 10000 = max
 end
 
 function unbindKeys()
@@ -1723,7 +1726,7 @@ end
 task.spawn(function()
     while true do
         task.wait(REPEAT_RATE)
-        if not State.visible then continue end
+        if not State.visible or State.mouseMode then continue end
         local now = tick()
         for k, t in pairs(heldKeys) do
             if now - t > REPEAT_DELAY then
@@ -1734,15 +1737,32 @@ task.spawn(function()
     end
 end)
 
--- [ key always active
-UIS.InputBegan:Connect(function(input, gp)
+-- ALT key: opens menu when closed. Also handles V key exit from mouse mode.
+-- This listener is for when the CAS sink is NOT active (menu closed or mouse mode)
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    -- ALT: open menu when closed, or close mouse mode + menu
     if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
-        toggleMenu(not State.visible)
+        if State.mouseMode then
+            -- In mouse mode: ALT closes the whole menu
+            disableMouseMode()
+            toggleMenu(false)
+        elseif not State.visible then
+            -- Menu is closed: open it
+            toggleMenu(true)
+        end
+        -- If menu is open + keyboard mode, the CAS handler catches ALT
+        return
+    end
+
+    -- V key: exit mouse mode when in mouse mode
+    if input.KeyCode == Enum.KeyCode.V and State.mouseMode and State.visible then
+        disableMouseMode()
+        return
     end
 end)
 
 ------------------------------------------------------------------------
---  ✨ ULTRA ENHANCED VISUAL EFFECTS LOOP
+--  VISUAL EFFECTS LOOP
 ------------------------------------------------------------------------
 local phase = 0
 
@@ -1774,19 +1794,14 @@ RS.Heartbeat:Connect(function(dt)
         resizeIcon.TextColor3 = c.glow
     end
 
-    -- ✨ Enhanced border glow pulse
     outerStroke.Transparency = 0.05 + math.sin(phase * 2.8) * 0.12
     if outerGlow then
         outerGlow.Transparency = 0.82 + math.sin(phase * 3.2) * 0.1
     end
 
-    -- ✨ Enhanced title stroke with faster pulse
     titleTextStroke.Transparency = 0.2 + math.sin(phase * 2.2) * 0.15
-
-    -- ✨ Top glare shimmer with wave effect
     topGlare.BackgroundTransparency = 0.88 + math.sin(phase * 1.3) * 0.02
 
-    -- ✨ Enhanced fog drift with circular motion
     local fogSpeed = 0.35
     fogA.Position = UDim2.new(
         0.06 + math.sin(phase * fogSpeed) * 0.06, 0, 
@@ -1797,13 +1812,9 @@ RS.Heartbeat:Connect(function(dt)
         0.45 - math.cos(phase * fogSpeed * 0.7) * 0.04, 0
     )
 
-    -- ✨ Inner border pulse
     innerStroke.Transparency = 0.62 + math.sin(phase * 3.5) * 0.08
-
-    -- ✨ Subtitle banner subtle pulse
     subtitleBanner.BackgroundTransparency = 0.4 + math.sin(phase * 1.8) * 0.04
 
-    -- ✨ Enhanced chromatic glitch with more drama
     if State.glitchTitle then
         if math.random() < 0.015 then
             local ox = (math.random() - 0.5) * 8
@@ -1819,7 +1830,6 @@ RS.Heartbeat:Connect(function(dt)
             end)
         end
 
-        -- ✨ More frequent heavy glitch bursts
         if math.random() < 0.003 then
             for i = 1, 4 do
                 local ox = (math.random() - 0.5) * 12
@@ -1834,11 +1844,14 @@ RS.Heartbeat:Connect(function(dt)
         end
     end
     
-    -- ✨ Animated title underline
     titleLine.BackgroundTransparency = 0.35 + math.sin(phase * 2.5) * 0.08
+    
+    -- Mouse mode indicator pulse
+    if State.mouseMode and mouseModeIndicator.Visible then
+        mouseModeIndicator.TextTransparency = 0.1 + math.sin(phase * 3) * 0.15
+    end
 end)
 
--- ✨ Rainbow: refresh items more frequently for smoother transitions
 task.spawn(function()
     while true do
         task.wait(0.35)
@@ -1849,13 +1862,13 @@ task.spawn(function()
 end)
 
 ------------------------------------------------------------------------
---  ✨ ENHANCED PARTICLE SYSTEMS
+--  PARTICLE SYSTEMS
 ------------------------------------------------------------------------
 local particleFolder = Instance.new("Folder")
 particleFolder.Name = "Particles"
 particleFolder.Parent = gui
 
--- Bottom particles (floating up) - Enhanced with variety
+-- Bottom particles
 task.spawn(function()
     while true do
         task.wait(0.12 + math.random() * 0.22)
@@ -1884,13 +1897,13 @@ task.spawn(function()
             Position = UDim2.new(sx + (math.random()-0.5)*0.09, 0, sy - 0.14 - math.random()*0.14, 0),
             BackgroundTransparency = 1,
             Size = UDim2.new(0, 1, 0, 1),
-            Rotation = (math.random() - 0.5) * 180, -- ✨ Add rotation
+            Rotation = (math.random() - 0.5) * 180,
         }, Enum.EasingStyle.Sine)
         task.delay(dur + 0.1, function() p:Destroy() end)
     end
 end)
 
--- Side particles - Enhanced with glow
+-- Side particles
 task.spawn(function()
     while true do
         task.wait(0.25 + math.random() * 0.45)
@@ -1915,8 +1928,7 @@ task.spawn(function()
         })
         addCorner(p, size)
         
-        -- ✨ Add glow stroke
-        local stroke = addStroke(p, c.glow, 1, 0.7)
+        local pStroke = addStroke(p, c.glow, 1, 0.7)
 
         local dur = 1.3 + math.random() * 2.2
         local drift = (side == 0 and -1 or 1) * (0.014 + math.random() * 0.028)
@@ -1925,12 +1937,12 @@ task.spawn(function()
             BackgroundTransparency = 1,
             Size = UDim2.new(0, 0, 0, 0),
         })
-        quickTween(stroke, dur, { Transparency = 1 })
+        quickTween(pStroke, dur, { Transparency = 1 })
         task.delay(dur + 0.1, function() p:Destroy() end)
     end
 end)
 
--- Internal ambient particles - Enhanced with trails
+-- Internal ambient particles
 task.spawn(function()
     while true do
         task.wait(0.35 + math.random() * 0.55)
@@ -1952,7 +1964,7 @@ task.spawn(function()
             Position = UDim2.new(p.Position.X.Scale + (math.random()-0.5)*0.16, 0, -0.06, 0),
             BackgroundTransparency = 1,
             Size = UDim2.new(0, 0, 0, 0),
-            Rotation = (math.random() - 0.5) * 360, -- ✨ Add rotation
+            Rotation = (math.random() - 0.5) * 360,
         }, Enum.EasingStyle.Sine)
         task.delay(dur + 0.1, function() p:Destroy() end)
     end
@@ -1964,7 +1976,6 @@ end)
 local Library = {}
 Library.__index = Library
 
--- ✨ Make Library globally accessible for addons
 _G.SpookyLibrary = Library
 
 function Library:CreateWindow(title, version)
@@ -2019,7 +2030,6 @@ function Library:CreateWindow(title, version)
                 }
                 table.insert(sec.elements, el)
 
-                -- Return controller
                 return {
                     Set = function(_, val)
                         el.value = val
@@ -2135,7 +2145,6 @@ function Library:CreateWindow(title, version)
                 }
                 table.insert(sec.elements, el)
 
-                -- Keybind listener
                 UIS.InputBegan:Connect(function(input, gp)
                     if gp then return end
                     if not State.visible and el.value and input.KeyCode == el.value then
@@ -2174,6 +2183,10 @@ function Library:CreateWindow(title, version)
         showToast(msg)
     end
 
+    function Window:SetAutoSave(val)
+        -- Stub for compatibility
+    end
+
     function Window:Destroy()
         State.visible = false
         unbindKeys()
@@ -2188,8 +2201,7 @@ end
 ------------------------------------------------------------------------
 mainFrame.Visible = false
 hintFrame.Visible = true
-print("[SPOOKALICIOUS V4 ✨ ENHANCED] Library loaded successfully!")
-print("✨ NEW FEATURES: Enhanced animations, ripple effects, variety sounds, better particles!")
-print("Press LEFT ALT to open.")
+print("[SPOOKALICIOUS V4] Library loaded successfully!")
+print("Press LEFT ALT to open. V for mouse mode.")
 
 return Library
