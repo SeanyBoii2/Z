@@ -1653,7 +1653,6 @@ local BLOCKED = {
     Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six,
     Enum.KeyCode.Seven, Enum.KeyCode.Eight, Enum.KeyCode.Nine, Enum.KeyCode.Zero,
     Enum.KeyCode.Escape,
-    Enum.KeyCode.LeftAlt, -- Also sink ALT so game doesn't see it
 }
 
 local heldKeys = {}
@@ -1667,12 +1666,6 @@ function bindKeys()
         local k = inputObj.KeyCode
         if inputState == Enum.UserInputState.Begin then
             heldKeys[k] = tick()
-
-            -- ALT toggles menu closed
-            if k == Enum.KeyCode.LeftAlt then
-                toggleMenu(false)
-                return Enum.ContextActionResult.Sink
-            end
 
             -- V toggles mouse mode
             if k == Enum.KeyCode.V then
@@ -1740,17 +1733,11 @@ end)
 -- ALT key: opens menu when closed. Also handles V key exit from mouse mode.
 -- This listener is for when the CAS sink is NOT active (menu closed or mouse mode)
 UIS.InputBegan:Connect(function(input, gameProcessed)
-    -- ALT: open menu when closed, or close mouse mode + menu
     if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
         if State.mouseMode then
-            -- In mouse mode: ALT closes the whole menu
             disableMouseMode()
-            toggleMenu(false)
-        elseif not State.visible then
-            -- Menu is closed: open it
-            toggleMenu(true)
         end
-        -- If menu is open + keyboard mode, the CAS handler catches ALT
+        toggleMenu(not State.visible)
         return
     end
 
