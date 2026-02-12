@@ -1576,12 +1576,23 @@ end
 --  OPEN / CLOSE
 ------------------------------------------------------------------------
 function toggleMenu(show)
+    if State._toggling then return end  -- debounce
+    State._toggling = true
+    task.delay(0.3, function() State._toggling = false end)
+
     State.visible = show
+    
+    -- Cancel any pending close
+    if State._closeThread then
+        task.cancel(State._closeThread)
+        State._closeThread = nil
+    end
+    
     if show then
         State.currentView = "home"
         State.sel = 1
         State.stack = {}
-        State.mouseMode = false  -- always start in keyboard mode
+        State.mouseMode = false
         renderView()
 
         mainFrame.Visible = true
@@ -1606,6 +1617,7 @@ function toggleMenu(show)
         
         task.spawn(function()
             task.wait(0.35)
+            if not State.visible then return end
             for i = 1, 3 do
                 mainFrame.Position = UDim2.new(
                     targetPos.X.Scale, 
@@ -1630,7 +1642,10 @@ function toggleMenu(show)
             BackgroundTransparency = 1,
         })
 
-        task.delay(0.24, function() mainFrame.Visible = false end)
+        State._closeThread = task.delay(0.24, function()
+            State._closeThread = nil
+            mainFrame.Visible = false
+        end)
         unbindKeys()
     end
 end
@@ -1733,7 +1748,9 @@ end)
 -- ALT key: opens menu when closed. Also handles V key exit from mouse mode.
 -- This listener is for when the CAS sink is NOT active (menu closed or mouse mode)
 UIS.InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.LeftAlt and gui.Parent then
+    -- ALT: toggle menu open/close (debounce handled inside toggleMenu)
+    if input.KeyCode == Enum.KeyCode.LeftAlt then
+        if not gui.Parent then return end
         if State.mouseMode then
             disableMouseMode()
         end
