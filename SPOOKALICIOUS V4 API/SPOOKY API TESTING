@@ -882,7 +882,7 @@ for _, corner in ipairs({
         AnchorPoint = Vector2.new(corner.ax, corner.ay),
         BackgroundColor3 = ct().glow,
         BackgroundTransparency = 0.3,
-        ZIndex = 48,
+        ZIndex = 18,
     })
     addCorner(h, 1)
     table.insert(corners, h)
@@ -894,7 +894,7 @@ for _, corner in ipairs({
         AnchorPoint = Vector2.new(corner.ax, corner.ay),
         BackgroundColor3 = ct().glow,
         BackgroundTransparency = 0.3,
-        ZIndex = 48,
+        ZIndex = 18,
     })
     addCorner(v, 1)
     table.insert(corners, v)
@@ -920,8 +920,9 @@ local lightSweep = makeFrame(mainFrame, {
     Position = UDim2.new(-0.2, 0, 0, 0),
     BackgroundColor3 = Color3.new(1, 1, 1),
     BackgroundTransparency = 0.96,
-    ZIndex = 45,
+    ZIndex = 16,  -- Below content (20+) so it doesn't block clicks
     ClipsDescendants = false,
+    Active = false,  -- Don't block mouse input
 })
 addGradient(lightSweep, NumberSequence.new({
     NumberSequenceKeypoint.new(0, 1),
@@ -947,8 +948,9 @@ local scanlineOverlay = makeFrame(mainFrame, {
     Size = UDim2.new(1, 0, 1, 0),
     BackgroundColor3 = Color3.new(0,0,0),
     BackgroundTransparency = 0.955,
-    ZIndex = 46,
+    ZIndex = 17,  -- Below content so it doesn't block clicks
 })
+scanlineOverlay.Active = false  -- Don't block mouse input
 
 ------------------------------------------------------------------------
 --  TITLE AREA
@@ -957,7 +959,7 @@ local titleRegion = makeFrame(mainFrame, {
     Name = "TitleRegion",
     Size = UDim2.new(1, 0, 0, 58),
     Position = UDim2.new(0, 0, 0, 5),
-    ZIndex = 20,
+    ZIndex = 56,  -- Above overlays for drag to work
 })
 
 local titleLabel = makeLabel(titleRegion, {
@@ -1081,7 +1083,7 @@ itemsFrame.ScrollBarThickness = 4
 itemsFrame.ScrollBarImageColor3 = ct().border
 itemsFrame.ScrollBarImageTransparency = 0.3
 itemsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-itemsFrame.ZIndex = 20
+itemsFrame.ZIndex = 55  -- MUST be above scanlines(46), lightSweep(45), corners(48) for clicks to work
 itemsFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
 itemsFrame.Parent = mainFrame
 
@@ -1507,7 +1509,8 @@ local function createItemUI(index, item, yPos)
         sliderBtn.Position = UDim2.new(0, -5, 0, -3)
         sliderBtn.BackgroundTransparency = 1
         sliderBtn.Text = ""
-        sliderBtn.ZIndex = 33
+        sliderBtn.ZIndex = 61
+        sliderBtn.Active = true
         sliderBtn.Parent = trackWrap
 
         local sliderDragging = false
@@ -1627,7 +1630,7 @@ local function createItemUI(index, item, yPos)
         tb.PlaceholderColor3 = c.accentDim
         tb.Text = item.value or ""
         tb.ClearTextOnFocus = false
-        tb.ZIndex = 29
+        tb.ZIndex = 61
         tb.Parent = inputFrame
 
         tb.FocusLost:Connect(function(enter)
@@ -1674,9 +1677,10 @@ local function createItemUI(index, item, yPos)
                 optBtn.Size = UDim2.new(1, 0, 1, 0)
                 optBtn.BackgroundTransparency = 1
                 optBtn.Text = ""
-                optBtn.ZIndex = 30
+                optBtn.ZIndex = 62
+                optBtn.Active = true
                 optBtn.Parent = optFrame
-                optBtn.MouseButton1Click:Connect(function()
+                optBtn.Activated:Connect(function()
                     item.value = opt
                     item._expanded = false
                     if item.callback then item.callback(opt) end
@@ -1707,25 +1711,31 @@ local function createItemUI(index, item, yPos)
         btn.Size = UDim2.new(1, 0, 0, math.min(h, H_DROP))
         btn.BackgroundTransparency = 1
         btn.Text = ""
-        btn.ZIndex = 32
+        btn.ZIndex = 60
+        btn.Active = true
         btn.Parent = frame
-        btn.MouseButton1Click:Connect(function()
+        
+        -- Activated is the ONLY reliable click signal inside ScrollingFrame.
+        -- MouseButton1Click and InputBegan both get swallowed by ScrollingFrame
+        -- scroll detection. Activated fires after a proper click/tap completes.
+        btn.Activated:Connect(function()
             State.sel = index
-            local mousePos = UIS:GetMouseLocation()
-            local framePos = frame.AbsolutePosition
-            createRipple(frame, mousePos.X - framePos.X, mousePos.Y - framePos.Y)
             doSelect()
         end)
+        
+        -- MouseButton1Down fires on press (before release) - backup for fast clicks
+        btn.MouseButton1Down:Connect(function()
+            State.sel = index
+        end)
+        
         btn.MouseEnter:Connect(function()
             if State.sel ~= index then
                 playSound("hover")
-                -- Dim the old selected frame (don't destroy it)
                 local oldFrame = itemInstances[State.sel]
                 if oldFrame and oldFrame.Parent then
                     quickTween(oldFrame, 0.12, { BackgroundTransparency = 1 })
                 end
                 State.sel = index
-                -- Highlight new frame (lightweight, no re-render)
                 quickTween(frame, 0.12, { BackgroundTransparency = 0.87 })
             end
         end)
@@ -1945,6 +1955,11 @@ _G.SpookyRenderView = renderView
 --  NAVIGATION LOGIC
 ------------------------------------------------------------------------
 function doSelect()
+    -- Debounce using tick() (task.delay can be unreliable in some exploit environments)
+    local now = tick()
+    if State._lastSelectTime and (now - State._lastSelectTime) < 0.15 then return end
+    State._lastSelectTime = now
+    
     local item = State.flatItems[State.sel]
     if not item then return end
 
@@ -2661,6 +2676,50 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
             enableMouseMode()
         end
         return
+    end
+    
+    -- X key: back/close while in mouse mode (CAS sink is unbound so we handle it here)
+    if input.KeyCode == Enum.KeyCode.X and State.visible and State.mouseMode then
+        doGoBack()
+        return
+    end
+end)
+
+------------------------------------------------------------------------
+--  GLOBAL CLICK HANDLER (BULLETPROOF)
+--  UIS.InputBegan fires for ALL clicks, even if ScrollingFrame or 
+--  overlays try to intercept. We manually check if the click is
+--  within any item frame and activate it.
+------------------------------------------------------------------------
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if not State.visible then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1 
+    and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    
+    local cx, cy = input.Position.X, input.Position.Y
+    
+    -- Check if click is within itemsFrame bounds first
+    local ifPos = itemsFrame.AbsolutePosition
+    local ifSize = itemsFrame.AbsoluteSize
+    if cx < ifPos.X or cx > ifPos.X + ifSize.X 
+    or cy < ifPos.Y or cy > ifPos.Y + ifSize.Y then return end
+    
+    -- Find which item frame contains the click
+    for i, frame in ipairs(itemInstances) do
+        if frame.Parent then
+            local fp = frame.AbsolutePosition
+            local fs = frame.AbsoluteSize
+            if cx >= fp.X and cx <= fp.X + fs.X 
+            and cy >= fp.Y and cy <= fp.Y + fs.Y then
+                local item = State.flatItems[i]
+                if item and item.type ~= "section_header" and item.type ~= "textbox" and item.type ~= "slider" then
+                    State.sel = i
+                    createRipple(frame, cx - fp.X, cy - fp.Y)
+                    doSelect()
+                end
+                break
+            end
+        end
     end
 end)
 
