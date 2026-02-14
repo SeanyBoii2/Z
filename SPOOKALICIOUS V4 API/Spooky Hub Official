@@ -1,0 +1,648 @@
+--[[
+    ================================================================
+    =              SPOOKY HUB V4 — CLEAN BUILD                     =
+    =         Native Config System (no addons needed)              =
+    ================================================================
+--]]
+
+--================================--
+--          SERVICES              --
+--================================--
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
+
+local player = Players.LocalPlayer
+
+--================================--
+--        NOTIFICATION            --
+--================================--
+local function sendNotification(title, text)
+    for i = 1, 10 do
+        local success = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 5,
+            })
+        end)
+        if success then break end
+        task.wait(0.5)
+    end
+end
+
+-- Silent loads
+pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/CONTROL%20PLAYER"))() end)
+
+--================================--
+--         LOAD LIBRARY           --
+--================================--
+print("[SPOOKY HUB] Loading Spookalicious V4 library...")
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SPOOKY%20API%20TESTING"))()
+
+-- No addons needed! SaveConfig, LoadConfig, CreateLabel, CreateDivider
+-- are all built natively into the API now.
+
+print("[SPOOKY HUB] Library loaded!")
+
+--================================--
+--        CREATE WINDOW           --
+--================================--
+local Window = Library:CreateWindow("SPOOKY HUB", "V4")
+print("[SPOOKY HUB] Window created!")
+
+-- Quick filesystem check
+local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
+if _hasFS then
+    print("[SPOOKY HUB] ✓ File system available — configs will persist!")
+else
+    warn("[SPOOKY HUB] ✗ No writefile/readfile — configs won't persist across sessions!")
+end
+
+--================================--
+--      GLOBAL VARIABLES          --
+--================================--
+local loadedScripts = {}
+
+-- Movement state
+local speedEnabled = false
+local flyEnabled = false
+local noclipEnabled = false
+local infJumpEnabled = false
+local flySpeed = 80
+local flyBodyVel = nil
+local flyBodyGyro = nil
+
+-- Functional toggles that should reset to OFF/default on config load
+-- These are movement features that shouldn't auto-activate on rejoin
+local functionalToggles = {}
+
+local function registerFunctionalToggle(toggle, defaultState)
+    table.insert(functionalToggles, { ref = toggle, default = defaultState or false })
+end
+
+-- Reset all functional toggles to their defaults
+local function resetFunctionalToggles()
+    for _, item in ipairs(functionalToggles) do
+        item.ref:Set(item.default)
+    end
+end
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                       GAME SCRIPTS PAGE                                ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local GAME_SCRIPTS = {
+    {
+        Name = "Michales Zombies",
+        URL = "https://raw.githubusercontent.com/PLACEHOLDER/PLACEHOLDER/main/MichalesZombies.lua",
+    },
+    {
+        Name = "Zombies 2",
+        URL = "https://raw.githubusercontent.com/PLACEHOLDER/PLACEHOLDER/main/Zombies2.lua",
+    },
+}
+
+local GameScriptsPage = Window:CreatePage("Game Scripts")
+local GameScriptsSection = GameScriptsPage:CreateSection("Game-Specific Scripts")
+
+GameScriptsSection:CreateLabel("Load game-specific scripts below")
+GameScriptsSection:CreateDivider()
+
+for _, scriptData in ipairs(GAME_SCRIPTS) do
+    GameScriptsSection:CreateButton(scriptData.Name, function()
+        if loadedScripts[scriptData.Name] then
+            Window:Notify(scriptData.Name .. " already loaded!")
+            return
+        end
+        Window:Notify("Loading " .. scriptData.Name .. "...")
+        local success, err = pcall(function()
+            loadstring(game:HttpGet(scriptData.URL))()
+        end)
+        if success then
+            loadedScripts[scriptData.Name] = true
+            Window:Notify(scriptData.Name .. " loaded!")
+            sendNotification("Loaded", scriptData.Name .. " loaded successfully!")
+        else
+            Window:Notify("ERROR: " .. scriptData.Name .. " failed!")
+            sendNotification("Error", "Failed to load " .. scriptData.Name)
+            warn("Load error: " .. tostring(err))
+        end
+    end)
+end
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                     UNIVERSAL SCRIPTS PAGE                             ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local UNIVERSAL_SCRIPTS = {
+    {
+        Name = "Motorcycle Tricks",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Motorcycle%20Tricks%20Universal.txt",
+    },
+    {
+        Name = "Superman Fly",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Superman%20Fly/Fly%20Gui",
+    },
+    {
+        Name = "NPC Autofarm",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Universal%20Npc%20Autofarm.txt",
+    },
+    {
+        Name = "Infinite Yield",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Infinite%20Yield.txt",
+    },
+    {
+        Name = "Animation Logger",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Animation%20Logger.txt",
+    },
+    {
+        Name = "Server Saver",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Server%20Saver",
+    },
+    {
+        Name = "Hitbox Expander + Triggerbot",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot",
+    },
+}
+
+local UniversalScriptsPage = Window:CreatePage("Universal Scripts")
+local UniversalScriptSection = UniversalScriptsPage:CreateSection("Universal Script Loader")
+
+UniversalScriptSection:CreateLabel("Load universal scripts below")
+UniversalScriptSection:CreateDivider()
+
+for _, scriptData in ipairs(UNIVERSAL_SCRIPTS) do
+    UniversalScriptSection:CreateButton(scriptData.Name, function()
+        if loadedScripts[scriptData.Name] then
+            Window:Notify(scriptData.Name .. " already loaded!")
+            return
+        end
+        Window:Notify("Loading " .. scriptData.Name .. "...")
+        local success, err = pcall(function()
+            loadstring(game:HttpGet(scriptData.URL))()
+        end)
+        if success then
+            loadedScripts[scriptData.Name] = true
+            Window:Notify(scriptData.Name .. " loaded!")
+            sendNotification("Loaded", scriptData.Name .. " loaded successfully!")
+        else
+            Window:Notify("ERROR: " .. scriptData.Name .. " failed!")
+            sendNotification("Error", "Failed to load " .. scriptData.Name)
+            warn("Load error: " .. tostring(err))
+        end
+    end)
+end
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                        MOVEMENT PAGE                                   ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local MovementPage = Window:CreatePage("Movement")
+
+-- ═══════════════════ SPEED SECTION ═══════════════════
+local SpeedSection = MovementPage:CreateSection("Speed")
+
+SpeedSection:CreateLabel("Configure walk speed settings")
+SpeedSection:CreateDivider()
+
+local speedSlider = SpeedSection:CreateSlider("Walk Speed", {
+    Min = 16,
+    Max = 500,
+    DefaultValue = 16,
+    Step = 1
+}, function(value)
+    if speedEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.WalkSpeed = value
+    end
+end)
+
+local speedToggle = SpeedSection:CreateToggle("Enable Speed", {
+    Toggled = false
+}, function(value)
+    speedEnabled = value
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        if value then
+            player.Character.Humanoid.WalkSpeed = speedSlider:Get()
+        else
+            player.Character.Humanoid.WalkSpeed = 16
+        end
+    end
+end)
+registerFunctionalToggle(speedToggle, false)
+
+-- ═══════════════════ FLY SECTION ═══════════════════
+local FlySection = MovementPage:CreateSection("Fly")
+
+FlySection:CreateLabel("Use WASD + Space/Shift to fly")
+FlySection:CreateDivider()
+
+local function startFly()
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChild("Humanoid")
+    if not hrp or not hum then return end
+
+    local oldBV = hrp:FindFirstChild("SpookyFlyVel")
+    local oldBG = hrp:FindFirstChild("SpookyFlyGyro")
+    if oldBV then oldBV:Destroy() end
+    if oldBG then oldBG:Destroy() end
+    if flyBodyVel then pcall(function() flyBodyVel:Destroy() end) end
+    if flyBodyGyro then pcall(function() flyBodyGyro:Destroy() end) end
+
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.Name = "SpookyFlyGyro"
+    flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyGyro.P = 9e4
+    flyBodyGyro.D = 600
+    flyBodyGyro.CFrame = hrp.CFrame
+    flyBodyGyro.Parent = hrp
+
+    flyBodyVel = Instance.new("BodyVelocity")
+    flyBodyVel.Name = "SpookyFlyVel"
+    flyBodyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyVel.Velocity = Vector3.new(0, 0.1, 0)
+    flyBodyVel.Parent = hrp
+
+    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    hum:ChangeState(Enum.HumanoidStateType.Running)
+end
+
+local function stopFly()
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+        end
+    end
+    if flyBodyVel then pcall(function() flyBodyVel:Destroy() end); flyBodyVel = nil end
+    if flyBodyGyro then pcall(function() flyBodyGyro:Destroy() end); flyBodyGyro = nil end
+end
+
+local camera = workspace.CurrentCamera
+local flyKeys = {
+    [Enum.KeyCode.W] = true, [Enum.KeyCode.S] = true,
+    [Enum.KeyCode.A] = true, [Enum.KeyCode.D] = true,
+    [Enum.KeyCode.Space] = true, [Enum.KeyCode.LeftShift] = true,
+}
+local flyKeysDown = {}
+
+UIS.InputBegan:Connect(function(input, _)
+    if flyKeys[input.KeyCode] then flyKeysDown[input.KeyCode] = true end
+end)
+
+UIS.InputEnded:Connect(function(input, _)
+    if flyKeys[input.KeyCode] then flyKeysDown[input.KeyCode] = false end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not flyEnabled then return end
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if not flyBodyVel or not flyBodyVel.Parent then startFly(); return end
+    if not flyBodyGyro or not flyBodyGyro.Parent then startFly(); return end
+
+    camera = workspace.CurrentCamera
+    local camCF = camera.CFrame
+    local moveDir = Vector3.new(0, 0, 0)
+
+    if flyKeysDown[Enum.KeyCode.W] then moveDir = moveDir + camCF.LookVector end
+    if flyKeysDown[Enum.KeyCode.S] then moveDir = moveDir - camCF.LookVector end
+    if flyKeysDown[Enum.KeyCode.A] then moveDir = moveDir - camCF.RightVector end
+    if flyKeysDown[Enum.KeyCode.D] then moveDir = moveDir + camCF.RightVector end
+    if flyKeysDown[Enum.KeyCode.Space] then moveDir = moveDir + Vector3.new(0, 1, 0) end
+    if flyKeysDown[Enum.KeyCode.LeftShift] then moveDir = moveDir - Vector3.new(0, 1, 0) end
+
+    if moveDir.Magnitude > 0 then
+        moveDir = moveDir.Unit * flySpeed
+    else
+        moveDir = Vector3.new(0, 0.1, 0)
+    end
+
+    flyBodyVel.Velocity = moveDir
+    flyBodyGyro.CFrame = camCF
+
+    local hum = char:FindFirstChild("Humanoid")
+    if hum and hum:GetState() == Enum.HumanoidStateType.FallingDown then
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+    end
+end)
+
+player.CharacterAdded:Connect(function()
+    flyBodyVel = nil
+    flyBodyGyro = nil
+    if flyEnabled then
+        task.wait(1)
+        startFly()
+    end
+end)
+
+local flyToggle = FlySection:CreateToggle("Enable Fly", {
+    Toggled = false
+}, function(value)
+    flyEnabled = value
+    if value then startFly() else stopFly() end
+    Window:Notify("Fly: " .. (value and "ON" or "OFF"))
+end)
+registerFunctionalToggle(flyToggle, false)
+
+FlySection:CreateSlider("Fly Speed", {
+    Min = 20,
+    Max = 400,
+    DefaultValue = 80,
+    Step = 5
+}, function(value)
+    flySpeed = value
+end)
+
+FlySection:CreateKeybind("Fly Toggle Key", {
+    Default = nil
+}, function(key)
+    flyEnabled = not flyEnabled
+    if flyEnabled then startFly() else stopFly() end
+    Window:Notify("Fly: " .. (flyEnabled and "ON" or "OFF"))
+end)
+
+-- ═══════════════════ JUMP SECTION ═══════════════════
+local JumpSection = MovementPage:CreateSection("Jump")
+
+JumpSection:CreateSlider("Jump Power", {
+    Min = 50,
+    Max = 500,
+    DefaultValue = 50,
+    Step = 5
+}, function(value)
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.JumpPower = value
+    end
+end)
+
+local infJumpToggle = JumpSection:CreateToggle("Infinite Jump", {
+    Toggled = false
+}, function(value)
+    infJumpEnabled = value
+end)
+registerFunctionalToggle(infJumpToggle, false)
+
+UIS.JumpRequest:Connect(function()
+    if infJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- ═══════════════════ NOCLIP SECTION ═══════════════════
+local NoclipSection = MovementPage:CreateSection("Noclip")
+
+local noclipToggle = NoclipSection:CreateToggle("Noclip", {
+    Toggled = false
+}, function(value)
+    noclipEnabled = value
+    Window:Notify("Noclip: " .. (value and "ON" or "OFF"))
+end)
+registerFunctionalToggle(noclipToggle, false)
+
+RunService.Stepped:Connect(function()
+    if noclipEnabled and player.Character then
+        for _, part in ipairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                           SERVER PAGE                                  ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local ServerPage = Window:CreatePage("Server")
+local ServerSection = ServerPage:CreateSection("Server Tools")
+
+ServerSection:CreateTextbox("Chat Message", "Type message...", function(text)
+    if text and #text > 0 then
+        Window:Notify("Message: " .. text)
+    end
+end)
+
+ServerSection:CreateButton("Copy Server ID", function()
+    if setclipboard then
+        setclipboard(game.JobId)
+        Window:Notify("Server ID copied!")
+    else
+        Window:Notify("Clipboard not supported")
+    end
+end)
+
+ServerSection:CreateButton("Rejoin Server", function()
+    Window:Notify("Rejoining...")
+    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
+    if syn and syn.queue_on_teleport then
+        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    elseif queue_on_teleport then
+        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    end
+    task.wait(0.5)
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end)
+end)
+
+ServerSection:CreateButton("Reset Character", function()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.Health = 0
+    end
+    Window:Notify("Character reset!")
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                           MISC PAGE                                    ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local MiscPage = Window:CreatePage("Misc")
+local UtilSection = MiscPage:CreateSection("Utilities")
+
+local antiAfkToggle = UtilSection:CreateToggle("Anti-AFK", {
+    Toggled = true
+}, function(value)
+    Window:Notify("Anti-AFK: " .. (value and "ON" or "OFF"))
+end)
+registerFunctionalToggle(antiAfkToggle, true) -- defaults to ON
+
+player.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+UtilSection:CreateButton("Copy Discord", function()
+    if setclipboard then
+        setclipboard("spookyie")
+        Window:Notify("Discord copied: spookyie")
+    else
+        Window:Notify("Discord: spookyie")
+    end
+end)
+
+UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
+    Window:Notify("Webhook saved!")
+end)
+
+UtilSection:CreateDivider()
+
+local InfoSection = MiscPage:CreateSection("Information")
+
+InfoSection:CreateLabel("Script: SPOOKY HUB V4")
+InfoSection:CreateLabel("Discord: spookyie")
+InfoSection:CreateDivider()
+
+InfoSection:CreateButton("Credits", function()
+    Window:Notify("Made by Spooky // Discord: spookyie")
+end)
+
+InfoSection:CreateButton("Destroy GUI", function()
+    -- Auto-save before destroy
+    pcall(function() Window:SaveConfig("Default") end)
+    Window:Notify("Goodbye!")
+    task.wait(1)
+    Window:Destroy()
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                           CONFIG PAGE                                  ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local ConfigPage = Window:CreatePage("Config")
+local SaveLoadSection = ConfigPage:CreateSection("Save & Load")
+
+SaveLoadSection:CreateLabel("Manage your configurations")
+SaveLoadSection:CreateDivider()
+
+-- Profile name textbox
+local currentProfile = "Default"
+
+SaveLoadSection:CreateTextbox("Profile Name", "Default", function(text)
+    if text and #text > 0 then
+        currentProfile = text
+    end
+end)
+
+SaveLoadSection:CreateDivider()
+
+SaveLoadSection:CreateButton("Save Config", function()
+    local ok = Window:SaveConfig(currentProfile)
+    if ok then
+        Window:Notify("Config '" .. currentProfile .. "' saved!")
+    else
+        Window:Notify("Save failed — no writefile support?")
+    end
+end)
+
+SaveLoadSection:CreateButton("Load Config", function()
+    local ok = Window:LoadConfig(currentProfile)
+    if ok then
+        -- Reset movement toggles after loading (safety)
+        task.wait(0.1)
+        resetFunctionalToggles()
+        speedEnabled = false
+        flyEnabled = false
+        noclipEnabled = false
+        infJumpEnabled = false
+        stopFly()
+        Window:Notify("Config '" .. currentProfile .. "' loaded!")
+    else
+        Window:Notify("No config '" .. currentProfile .. "' found")
+    end
+end)
+
+SaveLoadSection:CreateButton("Delete Config", function()
+    Window:DeleteConfig(currentProfile)
+    Window:Notify("Config '" .. currentProfile .. "' deleted")
+end)
+
+SaveLoadSection:CreateDivider()
+
+SaveLoadSection:CreateButton("List Profiles", function()
+    local profiles = Window:GetProfiles()
+    if #profiles > 0 then
+        Window:Notify(#profiles .. " profiles: " .. table.concat(profiles, ", "))
+    else
+        Window:Notify("No saved profiles found")
+    end
+end)
+
+SaveLoadSection:CreateButton("Export to Clipboard", function()
+    local ok = Window:ExportConfig(currentProfile)
+    if ok then
+        Window:Notify("Config copied to clipboard!")
+    else
+        Window:Notify("Export failed")
+    end
+end)
+
+SaveLoadSection:CreateDivider()
+
+if _hasFS then
+    SaveLoadSection:CreateLabel("Saves to: SpookyHub_Configs/")
+else
+    SaveLoadSection:CreateLabel("WARNING: No file system — in-memory only!")
+end
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                           INITIALIZATION                               ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+-- Wait for UI to be ready
+task.wait(0.5)
+
+-- Auto-load saved config
+local loaded = Window:LoadConfig("Default")
+if loaded then
+    print("[SPOOKY HUB] ✓ Config auto-loaded!")
+else
+    print("[SPOOKY HUB] No saved config, using defaults")
+    -- Save defaults so there's something to load next time
+    Window:SaveConfig("Default")
+end
+
+-- ALWAYS force movement features OFF on startup (safety)
+resetFunctionalToggles()
+speedEnabled = false
+flyEnabled = false
+noclipEnabled = false
+infJumpEnabled = false
+stopFly()
+
+-- Auto-save config when menu is closed (optional, catches settings changes)
+-- This runs on a loop checking if the player is leaving
+game:BindToClose(function()
+    pcall(function() Window:SaveConfig("Default") end)
+end)
+
+-- Console output
+print("═══════════════════════════════════════════")
+print("  SPOOKY HUB V4 — LOADED")
+print("═══════════════════════════════════════════")
+print("  Player: " .. player.Name)
+print("  Config: " .. (loaded and "Loaded!" or "Fresh defaults"))
+print("  File System: " .. (_hasFS and "Available" or "Not available"))
+print("───────────────────────────────────────────")
+print("  LEFT ALT = Open menu")
+print("  V = Mouse mode")
+print("  Discord: spookyie")
+print("═══════════════════════════════════════════")
