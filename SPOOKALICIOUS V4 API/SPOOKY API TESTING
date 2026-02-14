@@ -2189,65 +2189,20 @@ end
 --  Press V again or ALT to go back to keyboard mode / close.
 ------------------------------------------------------------------------
 
--- Cursor management: free the cursor whenever menu is open
--- BUT allow right-click camera rotation by not fighting MouseBehavior when RMB is held
-local _savedMouseBehavior = nil
-local _savedMouseIcon = nil
+-- Cursor management: DO NOT fight the game's camera system.
+-- The GUI uses keyboard navigation primarily. Mouse clicking works
+-- through Activated/MouseButton1Down events regardless of MouseBehavior.
+-- First person, shift lock, and third person all work normally.
 local _cursorConn = nil
-local _rmbConn1 = nil
-local _rmbConn2 = nil
-local _rmbHeld = false
 
 local function unlockCursor()
-    if not _savedMouseBehavior then
-        _savedMouseBehavior = UIS.MouseBehavior
-        _savedMouseIcon = UIS.MouseIconEnabled
-    end
-    UIS.MouseBehavior = Enum.MouseBehavior.Default
-    UIS.MouseIconEnabled = true
-    
-    -- Track right mouse button: let camera rotate when RMB is held
-    if _rmbConn1 then _rmbConn1:Disconnect() end
-    if _rmbConn2 then _rmbConn2:Disconnect() end
-    
-    _rmbConn1 = UIS.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            _rmbHeld = true
-            -- Let the game's camera script take control
-        end
-    end)
-    _rmbConn2 = UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            _rmbHeld = false
-            -- Re-assert free cursor after camera rotation ends
-            if State.visible then
-                UIS.MouseBehavior = Enum.MouseBehavior.Default
-                UIS.MouseIconEnabled = true
-            end
-        end
-    end)
-    
-    -- Only override cursor when RMB is NOT held (allows camera rotation)
-    if _cursorConn then _cursorConn:Disconnect() end
-    _cursorConn = RS.Heartbeat:Connect(function()
-        if State.visible and not _rmbHeld then
-            UIS.MouseBehavior = Enum.MouseBehavior.Default
-            UIS.MouseIconEnabled = true
-        end
-    end)
+    -- No-op: don't touch MouseBehavior. The game controls it.
+    -- Mouse clicks work on GUI elements regardless of cursor lock state.
 end
 
 local function restoreCursor()
+    -- Cleanup any leftover connections (safety)
     if _cursorConn then _cursorConn:Disconnect(); _cursorConn = nil end
-    if _rmbConn1 then _rmbConn1:Disconnect(); _rmbConn1 = nil end
-    if _rmbConn2 then _rmbConn2:Disconnect(); _rmbConn2 = nil end
-    _rmbHeld = false
-    if _savedMouseBehavior then
-        UIS.MouseBehavior = _savedMouseBehavior
-        UIS.MouseIconEnabled = _savedMouseIcon
-        _savedMouseBehavior = nil
-        _savedMouseIcon = nil
-    end
 end
 
 local function enableMouseMode()
