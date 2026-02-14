@@ -163,10 +163,6 @@ local UNIVERSAL_SCRIPTS = {
         URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Animation%20Logger.txt",
     },
     {
-        Name = "Server Saver",
-        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Server%20Saver",
-    },
-    {
         Name = "Hitbox Expander + Triggerbot",
         URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot",
     },
