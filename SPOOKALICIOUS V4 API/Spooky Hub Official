@@ -8,7 +8,7 @@
 --================================--
 --      AUTO-RELOAD SETUP         --
 --================================--
-local SCRIPT_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
+local SCRIPT_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/Spooky%20Hub%20Official"
 
 -- Setup queue function (works with Solara and other executors)
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
