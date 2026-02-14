@@ -6,6 +6,20 @@
 --]]
 
 --================================--
+--      AUTO-RELOAD SETUP         --
+--================================--
+local SCRIPT_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
+
+-- Setup queue function (works with Solara and other executors)
+local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+
+if queueteleport then
+    print("[AUTO-RELOAD] Queue function found and ready")
+else
+    warn("[AUTO-RELOAD] No queue function available - auto-reload disabled")
+end
+
+--================================--
 --          SERVICES              --
 --================================--
 local Players = game:GetService("Players")
@@ -14,6 +28,7 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 
@@ -445,16 +460,60 @@ end)
 
 ServerSection:CreateButton("Rejoin Server", function()
     Window:Notify("Rejoining...")
-    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
-    if syn and syn.queue_on_teleport then
-        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
-    elseif queue_on_teleport then
-        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    
+    -- Queue script before teleporting (Infinite Yield style - most reliable)
+    if queueteleport and SCRIPT_URL ~= "" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+        print("[REJOIN] Script queued successfully")
     end
-    task.wait(0.5)
+    
+    -- Small delay then teleport
+    task.wait(0.3)
     pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
     end)
+end)
+
+ServerSection:CreateButton("Server Hop", function()
+    Window:Notify("Finding new server...")
+    
+    -- Queue script before hopping
+    if queueteleport and SCRIPT_URL ~= "" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+        print("[SERVER HOP] Script queued")
+    end
+    
+    -- Get list of servers and join a different one
+    local success, result = pcall(function()
+        local servers = HttpService:JSONDecode(
+            game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+        )
+        
+        if servers and servers.data then
+            for _, server in pairs(servers.data) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    Window:Notify("Joining new server...")
+                    task.wait(0.5)
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id)
+                    return
+                end
+            end
+            Window:Notify("No other servers available")
+        else
+            Window:Notify("Could not fetch servers")
+        end
+    end)
+    
+    if not success then
+        warn("[SERVER HOP] Error:", result)
+        Window:Notify("Server hop failed!")
+    end
 end)
 
 ServerSection:CreateButton("Reset Character", function()
@@ -462,6 +521,133 @@ ServerSection:CreateButton("Reset Character", function()
         player.Character.Humanoid.Health = 0
     end
     Window:Notify("Character reset!")
+end)
+
+ServerSection:CreateDivider()
+
+-- ═══════════════════════════════════════════════════════════
+--  SERVER SAVER SYSTEM
+-- ═══════════════════════════════════════════════════════════
+local FILE_NAME = "SavedServers_SpookyHub.json"
+
+-- Save/Load System
+local function saveServerData(data)
+    if writefile then
+        writefile(FILE_NAME, HttpService:JSONEncode(data))
+    end
+end
+
+local function loadServerData()
+    if isfile and isfile(FILE_NAME) then
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(readfile(FILE_NAME))
+        end)
+        if success then return result end
+    end
+    return {}
+end
+
+-- Server Map (maps display name to index)
+local serverMap = {}
+local selectedServer = nil
+
+local function buildServerList()
+    local data = loadServerData()
+    local names = {}
+    serverMap = {}
+
+    for i, v in ipairs(data) do
+        local displayName = "#" .. i .. " | " .. v.Time
+        table.insert(names, displayName)
+        serverMap[displayName] = i
+    end
+
+    return data, names
+end
+
+-- Build initial list
+local serverData, initialServerNames = buildServerList()
+
+-- Create Dropdown FIRST (so buttons can reference it)
+local savedServerDropdown = ServerSection:CreateDropdown("Saved Servers", {
+    List = initialServerNames,
+    Default = initialServerNames[1] or "None"
+}, function(value)
+    selectedServer = value
+end)
+
+selectedServer = initialServerNames[1]
+
+-- Save Current Server Button
+ServerSection:CreateButton("Save Current Server", function()
+    local data = loadServerData()
+    local entry = {
+        JobId = game.JobId,
+        PlaceId = game.PlaceId,
+        Time = os.date("%H:%M | %d %b")
+    }
+    table.insert(data, 1, entry)
+    if #data > 20 then table.remove(data, 21) end  -- Keep max 20
+    saveServerData(data)
+
+    local _, names = buildServerList()
+    savedServerDropdown:Refresh(names)
+    selectedServer = names[1]
+
+    Window:Notify("Server Saved!")
+end)
+
+-- Join Saved Server Button
+ServerSection:CreateButton("Join Saved Server", function()
+    if not selectedServer or selectedServer == "None" then
+        Window:Notify("No server selected!")
+        return
+    end
+
+    local index = serverMap[selectedServer]
+    if not index then
+        Window:Notify("Server not found! Try refreshing.")
+        return
+    end
+
+    local data = loadServerData()
+    local server = data[index]
+
+    if not server then
+        Window:Notify("Server data missing!")
+        return
+    end
+
+    -- Queue script before teleporting
+    if queueteleport and SCRIPT_URL ~= "" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+    end
+
+    Window:Notify("Joining: " .. server.Time)
+    task.wait(0.3)
+    TeleportService:TeleportToPlaceInstance(server.PlaceId, server.JobId, player)
+end)
+
+-- Refresh Server List Button
+ServerSection:CreateButton("Refresh Server List", function()
+    local data, names = buildServerList()
+    savedServerDropdown:Refresh(names)
+    if #names > 0 then
+        selectedServer = names[1]
+    end
+    Window:Notify("Found " .. #data .. " saved servers")
+end)
+
+-- Clear Server History Button
+ServerSection:CreateButton("Clear Server History", function()
+    saveServerData({})
+    serverMap = {}
+    selectedServer = nil
+    savedServerDropdown:Refresh({})
+    Window:Notify("Server history cleared!")
 end)
 
 
@@ -637,6 +823,7 @@ print("════════════════════════�
 print("  Player: " .. player.Name)
 print("  Config: " .. (loaded and "Loaded!" or "Fresh defaults"))
 print("  File System: " .. (_hasFS and "Available" or "Not available"))
+print("  Auto-Reload: " .. (queueteleport and "Ready" or "Not available"))
 print("───────────────────────────────────────────")
 print("  LEFT ALT = Open menu")
 print("  V = Mouse mode")
