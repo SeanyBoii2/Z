@@ -2,12 +2,13 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║               SPOOKALICIOUS V4 — DEVELOPER TEMPLATE                          ║
+║                         (UPDATED WITH WORKING AUTO-RELOAD)                   ║
 ║                                                                              ║
 ║   This template shows you how to build a full hub using the                  ║
 ║   Spookalicious V4 API. It comes pre-loaded with:                            ║
 ║                                                                              ║
 ║     • Config page   — Save/load settings across sessions                     ║
-║     • Server page   — Server tools, rejoin, reset                            ║
+║     • Server page   — Server tools, rejoin, server hop, reset                ║
 ║     • Misc page     — Utilities and info                                     ║
 ║     • Settings      — Built into the API (theme, sounds, particles)          ║
 ║                                                                              ║
@@ -23,50 +24,46 @@
 
 
 --══════════════════════════════════════════════════════════════
---  STEP 1: LOAD THE LIBRARY
+--  STEP 1: AUTO-RELOAD SETUP (IMPORTANT - DO THIS FIRST!)
 --══════════════════════════════════════════════════════════════
---  The API is a single file. Load it with HttpGet.
---  It returns a Library table that you use to create your window.
+--  ⚠️ CHANGE THE URL BELOW TO YOUR SCRIPT'S GITHUB RAW URL ⚠️
+--  This enables auto-reload when rejoining or server hopping
+
+local SCRIPT_URL = "YOUR_SCRIPT_URL_HERE"  -- ← CHANGE THIS!
+
+-- Setup queue function (works with Solara and other executors)
+local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+
+if queueteleport then
+    print("[AUTO-RELOAD] Queue function found and ready")
+else
+    warn("[AUTO-RELOAD] No queue function available - auto-reload disabled")
+end
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 2: LOAD THE LIBRARY
+--══════════════════════════════════════════════════════════════
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
 
---  The API is hosted above. It loads the full Spookalicious V4 library.
---  Everything below uses it — just add your own pages!
-
 
 --══════════════════════════════════════════════════════════════
---  STEP 2: CREATE THE WINDOW
+--  STEP 3: CREATE THE WINDOW
 --══════════════════════════════════════════════════════════════
---  CreateWindow(title, version)
---    title:   shown in the header (string)
---    version: shown below the title (string)
---
---  This also triggers the intro animation.
 
 local Window = Library:CreateWindow("MY HUB", "V1.0")  -- ← change title and version
 
---  The Window object has these methods:
---    Window:CreatePage(name)    → returns a Page object
---    Window:Toggle()            → open/close the menu
---    Window:Show()              → open the menu
---    Window:Hide()              → close the menu
---    Window:Notify(message)     → show a toast notification
---    Window:Destroy()           → destroy the entire GUI
---    Window:SaveConfig(name)    → save all settings to file
---    Window:LoadConfig(name)    → load settings from file
---    Window:GetProfiles()       → list all saved profiles
---    Window:ExportConfig(name)  → copy config JSON to clipboard
---    Window:DeleteConfig(name)  → delete a saved profile
-
 
 --══════════════════════════════════════════════════════════════
---  STEP 3: SERVICES (grab what you need)
+--  STEP 4: SERVICES
 --══════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
@@ -86,7 +83,6 @@ local function sendNotification(title, text)
 end
 
 -- Track toggles that should reset to OFF/default when config loads
--- (prevents movement features auto-activating on rejoin)
 local functionalToggles = {}
 
 local function registerFunctionalToggle(toggle, defaultState)
@@ -100,117 +96,8 @@ local function resetFunctionalToggles()
 end
 
 
---[[
-══════════════════════════════════════════════════════════════════
-   ELEMENT REFERENCE — EVERY ELEMENT TYPE YOU CAN CREATE
-══════════════════════════════════════════════════════════════════
-
-   All elements are created on a Section object.
-   The pattern is always:  Section:CreateType(label, options, callback)
-
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ TOGGLE      │ On/off switch                                │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateToggle(label, opts, callback)  │
-   │ Options:    │ { Toggled = false }                          │
-   │ Callback:   │ function(value)  -- true or false            │
-   │ Returns:    │ { Set(val), Get() }                          │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ SLIDER      │ Number picker with min/max/step              │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateSlider(label, opts, callback)  │
-   │ Options:    │ { Min=0, Max=100, DefaultValue=50, Step=1 }  │
-   │ Callback:   │ function(value)  -- number                   │
-   │ Returns:    │ { Set(val), Get() }                          │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ BUTTON      │ Clickable action                             │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateButton(label, callback)        │
-   │ Callback:   │ function()  -- fires on click                │
-   │ Returns:    │ element table                                │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ TEXTBOX     │ Text input field                             │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateTextbox(label, placeholder, cb)│
-   │ Callback:   │ function(text)  -- string                    │
-   │ Returns:    │ { Set(val), Get() }                          │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ DROPDOWN    │ Selection from a list                        │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateDropdown(label, opts, callback)│
-   │ Options:    │ { List={"A","B","C"}, Default="A" }          │
-   │ Callback:   │ function(value)  -- selected string          │
-   │ Returns:    │ { Set(val), Get(), Clear(), Add(list),       │
-   │             │   Refresh(newList) }                         │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ KEYBIND     │ Bindable key shortcut                        │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateKeybind(label, opts, callback) │
-   │ Options:    │ { Default = Enum.KeyCode.F }  -- or nil      │
-   │ Callback:   │ function(key)  -- fires when key pressed     │
-   │ Returns:    │ { Set(key), Get() }                          │
-   │ Note:       │ Keybind fires when menu is CLOSED.           │
-   │             │ Press key in menu to rebind, ESC to unbind.  │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ LABEL       │ Non-interactive text line                    │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateLabel(text)                    │
-   │ Note:       │ Cannot be selected. Just displays text.      │
-   └─────────────┴──────────────────────────────────────────────┘
-
-   ┌─────────────┬──────────────────────────────────────────────┐
-   │ DIVIDER     │ Visual separator line                        │
-   ├─────────────┼──────────────────────────────────────────────┤
-   │ Create:     │ Section:CreateDivider()                      │
-   │ Note:       │ Thin line between elements for organization. │
-   └─────────────┴──────────────────────────────────────────────┘
-
-
-   CONFIG SYSTEM — WHAT GETS SAVED:
-   ──────────────────────────────────
-   ✓ Saved:  Toggles, Sliders, Dropdowns, Textboxes, Keybinds
-   ✗ Skipped: Buttons, Labels, Dividers (no persistent state)
-   ✓ Also saved: Theme color, sounds, particles, scanlines, opacity
-
-   Toggle:Set() calls the callback automatically, so when a config
-   loads, the callbacks fire and your features activate properly.
-
-
-══════════════════════════════════════════════════════════════════
---]]
-
-
---══════════════════════════════════════════════════════════════
---  YOUR PAGES GO HERE  ↓↓↓
---══════════════════════════════════════════════════════════════
---  Pages appear in the order you create them.
---  The "Settings" page is automatically added by the API at the end.
---
---  STRUCTURE:
---    Window → Page → Section → Elements
---
---  Example:
---    local MyPage = Window:CreatePage("My Page")
---    local MySection = MyPage:CreateSection("Section Name")
---    MySection:CreateToggle("My Toggle", { Toggled = false }, function(v) ... end)
-
-
 -- ┌────────────────────────────────────────────────────────────┐
 -- │  ADD YOUR PAGES BELOW THIS LINE                            │
--- │  (before the Server/Misc/Config pages)                     │
 -- └────────────────────────────────────────────────────────────┘
 
 
@@ -219,124 +106,6 @@ end
 -- ┌────────────────────────────────────────────────────────────┐
 -- │  ADD YOUR PAGES ABOVE THIS LINE                            │
 -- └────────────────────────────────────────────────────────────┘
-
-
---╔══════════════════════════════════════════════════════════════════════════╗
---║    ⚠️  EXAMPLES PAGE — DELETE THIS ENTIRE SECTION WHEN YOU'RE DONE  ⚠️   ║
---║    This is just a reference showing every element type.                 ║
---║    It's safe to delete everything between the ════ lines below.        ║
---╚══════════════════════════════════════════════════════════════════════════╝
--- ═══════════════ START DELETE ═══════════════
-
-local ExamplePage = Window:CreatePage("Examples")
-
--- ═══ Toggle Example ═══
-local ToggleSection = ExamplePage:CreateSection("Toggles")
-
-ToggleSection:CreateLabel("Toggles are on/off switches")
-ToggleSection:CreateDivider()
-
-local myToggle = ToggleSection:CreateToggle("Example Toggle", {
-    Toggled = false         -- starting state
-}, function(value)
-    -- value = true or false
-    Window:Notify("Toggle is now: " .. tostring(value))
-end)
-
--- You can control toggles from code:
--- myToggle:Set(true)     -- turns it on (fires callback)
--- myToggle:Get()         -- returns current value
-
--- ═══ Slider Example ═══
-local SliderSection = ExamplePage:CreateSection("Sliders")
-
-SliderSection:CreateLabel("Sliders pick a number in a range")
-SliderSection:CreateDivider()
-
-local mySlider = SliderSection:CreateSlider("Speed Value", {
-    Min = 0,                -- minimum value
-    Max = 100,              -- maximum value
-    DefaultValue = 50,      -- starting value
-    Step = 5,               -- increment amount
-}, function(value)
-    -- value = number between Min and Max
-    Window:Notify("Speed: " .. value)
-end)
-
--- You can control sliders from code:
--- mySlider:Set(75)       -- sets value (fires callback)
--- mySlider:Get()         -- returns current value
-
--- ═══ Button Example ═══
-local ButtonSection = ExamplePage:CreateSection("Buttons")
-
-ButtonSection:CreateLabel("Buttons fire a function when clicked")
-ButtonSection:CreateDivider()
-
-ButtonSection:CreateButton("Click Me", function()
-    Window:Notify("Button was clicked!")
-end)
-
-ButtonSection:CreateButton("Print to Console", function()
-    print("Hello from Spookalicious!")
-end)
-
--- ═══ Dropdown Example ═══
-local DropdownSection = ExamplePage:CreateSection("Dropdowns")
-
-DropdownSection:CreateLabel("Dropdowns let you pick from a list")
-DropdownSection:CreateDivider()
-
-local myDropdown = DropdownSection:CreateDropdown("Pick a Fruit", {
-    List = { "Apple", "Banana", "Cherry", "Grape" },
-    Default = "Apple",      -- starting selection
-}, function(value)
-    -- value = selected string
-    Window:Notify("You picked: " .. value)
-end)
-
--- You can control dropdowns from code:
--- myDropdown:Set("Banana")                        -- select a value
--- myDropdown:Get()                                -- get current value
--- myDropdown:Add({"Mango", "Kiwi"})              -- add items to list
--- myDropdown:Refresh({"New", "List", "Here"})     -- replace entire list
--- myDropdown:Clear()                              -- empty the list
-
--- ═══ Textbox Example ═══
-local TextboxSection = ExamplePage:CreateSection("Textboxes")
-
-TextboxSection:CreateLabel("Textboxes accept typed input")
-TextboxSection:CreateDivider()
-
-local myTextbox = TextboxSection:CreateTextbox("Username", "Enter name...", function(text)
-    -- text = string the user typed
-    Window:Notify("You typed: " .. text)
-end)
-
--- You can control textboxes from code:
--- myTextbox:Set("hello")    -- set the text
--- myTextbox:Get()           -- get current text
-
--- ═══ Keybind Example ═══
-local KeybindSection = ExamplePage:CreateSection("Keybinds")
-
-KeybindSection:CreateLabel("Keybinds trigger when key is pressed")
-KeybindSection:CreateLabel("(only fires when menu is CLOSED)")
-KeybindSection:CreateDivider()
-
-local myKeybind = KeybindSection:CreateKeybind("Action Key", {
-    Default = nil,           -- nil = unbound, or Enum.KeyCode.F etc.
-}, function(key)
-    -- fires when the bound key is pressed (menu must be closed)
-    print("Keybind pressed:", key.Name)
-end)
-
--- You can control keybinds from code:
--- myKeybind:Set(Enum.KeyCode.G)   -- bind to G key
--- myKeybind:Get()                 -- get current key
-
-
--- ═══════════════ END DELETE ═══════════════
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
@@ -363,16 +132,60 @@ end)
 
 ServerSection:CreateButton("Rejoin Server", function()
     Window:Notify("Rejoining...")
-    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
-    if syn and syn.queue_on_teleport then
-        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
-    elseif queue_on_teleport then
-        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    
+    -- Queue script before teleporting (Infinite Yield style - most reliable)
+    if queueteleport and SCRIPT_URL ~= "YOUR_SCRIPT_URL_HERE" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+        print("[REJOIN] Script queued successfully")
     end
-    task.wait(0.5)
+    
+    -- Small delay then teleport
+    task.wait(0.3)
     pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
     end)
+end)
+
+ServerSection:CreateButton("Server Hop", function()
+    Window:Notify("Finding new server...")
+    
+    -- Queue script before hopping
+    if queueteleport and SCRIPT_URL ~= "YOUR_SCRIPT_URL_HERE" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+        print("[SERVER HOP] Script queued")
+    end
+    
+    -- Get list of servers and join a different one
+    local success, result = pcall(function()
+        local servers = HttpService:JSONDecode(
+            game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+        )
+        
+        if servers and servers.data then
+            for _, server in pairs(servers.data) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    Window:Notify("Joining new server...")
+                    task.wait(0.5)
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id)
+                    return
+                end
+            end
+            Window:Notify("No other servers available")
+        else
+            Window:Notify("Could not fetch servers")
+        end
+    end)
+    
+    if not success then
+        warn("[SERVER HOP] Error:", result)
+        Window:Notify("Server hop failed!")
+    end
 end)
 
 ServerSection:CreateButton("Reset Character", function()
@@ -441,12 +254,6 @@ end)
 --╔══════════════════════════════════════════════════════════════════════════╗
 --║                  CONFIG PAGE (do not modify)                           ║
 --╚══════════════════════════════════════════════════════════════════════════╝
---  This gives users Save/Load buttons.
---  The config system saves: toggles, sliders, dropdowns, textboxes, keybinds
---  AND UI settings (theme, sounds, particles, opacity, etc.)
---
---  Requires your executor to support writefile/readfile.
---  If not available, configs persist within the session only.
 
 local ConfigPage = Window:CreatePage("Config")
 local ConfigSection = ConfigPage:CreateSection("Save & Load")
@@ -473,7 +280,7 @@ ConfigSection:CreateButton("Load Config", function()
     local ok = Window:LoadConfig(currentProfile)
     if ok then
         task.wait(0.1)
-        resetFunctionalToggles() -- safety: reset movement features
+        resetFunctionalToggles()
         Window:Notify("Loaded: " .. currentProfile)
     else
         Window:Notify("No config found: " .. currentProfile)
@@ -506,14 +313,11 @@ ConfigSection:CreateLabel(_hasFS and "Saves to: SpookyHub_Configs/" or "No file 
 
 
 --══════════════════════════════════════════════════════════════
---  STEP 4: INITIALIZATION
+--  INITIALIZATION
 --══════════════════════════════════════════════════════════════
---  This runs after all pages are created.
---  It auto-loads saved config and resets dangerous toggles.
 
 task.wait(0.5)
 
--- Auto-load saved config
 local loaded = Window:LoadConfig("Default")
 if loaded then
     print("[HUB] Config loaded!")
@@ -522,76 +326,10 @@ else
     Window:SaveConfig("Default")
 end
 
--- Safety: always reset functional toggles after loading
 resetFunctionalToggles()
 
--- Auto-save when leaving
 game:BindToClose(function()
     pcall(function() Window:SaveConfig("Default") end)
 end)
 
 print("[HUB] Ready!")
-
-
---[[
-══════════════════════════════════════════════════════════════════
-   QUICK-START CHEATSHEET
-══════════════════════════════════════════════════════════════════
-
-   ADD A NEW PAGE:
-   ────────────────
-   local MyPage = Window:CreatePage("Page Name")
-   local MySection = MyPage:CreateSection("Section Name")
-
-
-   ADD ELEMENTS TO A SECTION:
-   ──────────────────────────
-   MySection:CreateLabel("Some text")
-   MySection:CreateDivider()
-   MySection:CreateToggle("Name", { Toggled = false }, function(v) end)
-   MySection:CreateSlider("Name", { Min=0, Max=100, DefaultValue=50, Step=1 }, function(v) end)
-   MySection:CreateButton("Name", function() end)
-   MySection:CreateTextbox("Name", "placeholder...", function(text) end)
-   MySection:CreateDropdown("Name", { List={"A","B"}, Default="A" }, function(v) end)
-   MySection:CreateKeybind("Name", { Default=nil }, function(key) end)
-
-
-   MAKE A TOGGLE RESET ON CONFIG LOAD:
-   ────────────────────────────────────
-   local toggle = MySection:CreateToggle(...)
-   registerFunctionalToggle(toggle, false)   -- false = resets to OFF
-   registerFunctionalToggle(toggle, true)    -- true = resets to ON
-
-
-   SHOW A NOTIFICATION:
-   ────────────────────
-   Window:Notify("Hello!")
-
-
-   SAVE/LOAD CONFIG FROM CODE:
-   ───────────────────────────
-   Window:SaveConfig("MyProfile")
-   Window:LoadConfig("MyProfile")
-
-
-   MULTIPLE SECTIONS ON ONE PAGE:
-   ──────────────────────────────
-   local Page = Window:CreatePage("My Page")
-   local Section1 = Page:CreateSection("First Section")
-   Section1:CreateToggle(...)
-   local Section2 = Page:CreateSection("Second Section")
-   Section2:CreateButton(...)
-
-
-   SCRIPT LOADER PATTERN:
-   ──────────────────────
-   local loaded = {}
-   MySection:CreateButton("Load Script", function()
-       if loaded["script1"] then return end
-       loaded["script1"] = true
-       loadstring(game:HttpGet("URL"))()
-       Window:Notify("Loaded!")
-   end)
-
-══════════════════════════════════════════════════════════════════
---]]
