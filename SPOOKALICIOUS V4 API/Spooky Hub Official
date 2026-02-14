@@ -13,12 +13,6 @@ local SCRIPT_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/ma
 -- Setup queue function (works with Solara and other executors)
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 
-if queueteleport then
-    print("[AUTO-RELOAD] Queue function found and ready")
-else
-    warn("[AUTO-RELOAD] No queue function available - auto-reload disabled")
-end
-
 --================================--
 --          SERVICES              --
 --================================--
@@ -55,28 +49,47 @@ pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Sean
 --================================--
 --         LOAD LIBRARY           --
 --================================--
-print("[SPOOKY HUB] Loading Spookalicious V4 library...")
+local Library
+local librarySuccess = false
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+-- Attempt 1: Silent load
+pcall(function()
+    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+    if Library then
+        librarySuccess = true
+    end
+end)
 
--- No addons needed! SaveConfig, LoadConfig, CreateLabel, CreateDivider
--- are all built natively into the API now.
+-- Attempt 2: If failed, retry once
+if not librarySuccess then
+    task.wait(0.5)
+    pcall(function()
+        Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+        if Library then
+            librarySuccess = true
+        end
+    end)
+end
 
-print("[SPOOKY HUB] Library loaded!")
+-- If library still didn't load, stop here silently
+if not Library or not librarySuccess then
+    return
+end
 
 --================================--
 --        CREATE WINDOW           --
 --================================--
-local Window = Library:CreateWindow("SPOOKY HUB", "V4")
-print("[SPOOKY HUB] Window created!")
+local Window
+pcall(function()
+    Window = Library:CreateWindow("SPOOKY HUB", "V4")
+end)
+
+if not Window then
+    return
+end
 
 -- Quick filesystem check
 local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
-if _hasFS then
-    print("[SPOOKY HUB] ✓ File system available — configs will persist!")
-else
-    warn("[SPOOKY HUB] ✗ No writefile/readfile — configs won't persist across sessions!")
-end
 
 --================================--
 --      GLOBAL VARIABLES          --
@@ -142,11 +155,6 @@ for _, scriptData in ipairs(GAME_SCRIPTS) do
         if success then
             loadedScripts[scriptData.Name] = true
             Window:Notify(scriptData.Name .. " loaded!")
-            sendNotification("Loaded", scriptData.Name .. " loaded successfully!")
-        else
-            Window:Notify("ERROR: " .. scriptData.Name .. " failed!")
-            sendNotification("Error", "Failed to load " .. scriptData.Name)
-            warn("Load error: " .. tostring(err))
         end
     end)
 end
@@ -202,11 +210,6 @@ for _, scriptData in ipairs(UNIVERSAL_SCRIPTS) do
         if success then
             loadedScripts[scriptData.Name] = true
             Window:Notify(scriptData.Name .. " loaded!")
-            sendNotification("Loaded", scriptData.Name .. " loaded successfully!")
-        else
-            Window:Notify("ERROR: " .. scriptData.Name .. " failed!")
-            sendNotification("Error", "Failed to load " .. scriptData.Name)
-            warn("Load error: " .. tostring(err))
         end
     end)
 end
@@ -467,7 +470,6 @@ ServerSection:CreateButton("Rejoin Server", function()
         pcall(function()
             queueteleport(queueCode)
         end)
-        print("[REJOIN] Script queued successfully")
     end
     
     -- Small delay then teleport
@@ -486,7 +488,6 @@ ServerSection:CreateButton("Server Hop", function()
         pcall(function()
             queueteleport(queueCode)
         end)
-        print("[SERVER HOP] Script queued")
     end
     
     -- Get list of servers and join a different one
@@ -511,7 +512,6 @@ ServerSection:CreateButton("Server Hop", function()
     end)
     
     if not success then
-        warn("[SERVER HOP] Error:", result)
         Window:Notify("Server hop failed!")
     end
 end)
