@@ -195,6 +195,133 @@ ServerSection:CreateButton("Reset Character", function()
     Window:Notify("Character reset!")
 end)
 
+ServerSection:CreateDivider()
+
+-- ═══════════════════════════════════════════════════════════
+--  SERVER SAVER SYSTEM
+-- ═══════════════════════════════════════════════════════════
+local FILE_NAME = "SavedServers_MyHub.json"  -- ← Change this name for your hub
+
+-- Save/Load System
+local function saveServerData(data)
+    if writefile then
+        writefile(FILE_NAME, HttpService:JSONEncode(data))
+    end
+end
+
+local function loadServerData()
+    if isfile and isfile(FILE_NAME) then
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(readfile(FILE_NAME))
+        end)
+        if success then return result end
+    end
+    return {}
+end
+
+-- Server Map (maps display name to index)
+local serverMap = {}
+local selectedServer = nil
+
+local function buildServerList()
+    local data = loadServerData()
+    local names = {}
+    serverMap = {}
+
+    for i, v in ipairs(data) do
+        local displayName = "#" .. i .. " | " .. v.Time
+        table.insert(names, displayName)
+        serverMap[displayName] = i
+    end
+
+    return data, names
+end
+
+-- Build initial list
+local serverData, initialServerNames = buildServerList()
+
+-- Save Current Server Button
+ServerSection:CreateButton("Save Current Server", function()
+    local data = loadServerData()
+    local entry = {
+        JobId = game.JobId,
+        PlaceId = game.PlaceId,
+        Time = os.date("%H:%M | %d %b")
+    }
+    table.insert(data, 1, entry)
+    if #data > 20 then table.remove(data, 21) end  -- Keep max 20
+    saveServerData(data)
+
+    local _, names = buildServerList()
+    savedServerDropdown:Refresh(names)
+    selectedServer = names[1]
+
+    Window:Notify("Server Saved!")
+end)
+
+-- Saved Servers Dropdown
+local savedServerDropdown = ServerSection:CreateDropdown("Saved Servers", {
+    List = initialServerNames,
+    Default = initialServerNames[1] or "None"
+}, function(value)
+    selectedServer = value
+end)
+
+selectedServer = initialServerNames[1]
+
+-- Join Saved Server Button
+ServerSection:CreateButton("Join Saved Server", function()
+    if not selectedServer or selectedServer == "None" then
+        Window:Notify("No server selected!")
+        return
+    end
+
+    local index = serverMap[selectedServer]
+    if not index then
+        Window:Notify("Server not found! Try refreshing.")
+        return
+    end
+
+    local data = loadServerData()
+    local server = data[index]
+
+    if not server then
+        Window:Notify("Server data missing!")
+        return
+    end
+
+    -- Queue script before teleporting
+    if queueteleport and SCRIPT_URL ~= "YOUR_SCRIPT_URL_HERE" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+    end
+
+    Window:Notify("Joining: " .. server.Time)
+    task.wait(0.3)
+    TeleportService:TeleportToPlaceInstance(server.PlaceId, server.JobId, player)
+end)
+
+-- Refresh Server List Button
+ServerSection:CreateButton("Refresh Server List", function()
+    local data, names = buildServerList()
+    savedServerDropdown:Refresh(names)
+    if #names > 0 then
+        selectedServer = names[1]
+    end
+    Window:Notify("Found " .. #data .. " saved servers")
+end)
+
+-- Clear Server History Button
+ServerSection:CreateButton("Clear Server History", function()
+    saveServerData({})
+    serverMap = {}
+    selectedServer = nil
+    savedServerDropdown:Refresh({})
+    Window:Notify("Server history cleared!")
+end)
+
 
 --╔══════════════════════════════════════════════════════════════════════════╗
 --║                   MISC PAGE (do not modify)                            ║
