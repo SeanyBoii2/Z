@@ -240,6 +240,16 @@ end
 -- Build initial list
 local serverData, initialServerNames = buildServerList()
 
+-- Create Dropdown FIRST (so buttons can reference it)
+local savedServerDropdown = ServerSection:CreateDropdown("Saved Servers", {
+    List = initialServerNames,
+    Default = initialServerNames[1] or "None"
+}, function(value)
+    selectedServer = value
+end)
+
+selectedServer = initialServerNames[1]
+
 -- Save Current Server Button
 ServerSection:CreateButton("Save Current Server", function()
     local data = loadServerData()
@@ -258,16 +268,6 @@ ServerSection:CreateButton("Save Current Server", function()
 
     Window:Notify("Server Saved!")
 end)
-
--- Saved Servers Dropdown
-local savedServerDropdown = ServerSection:CreateDropdown("Saved Servers", {
-    List = initialServerNames,
-    Default = initialServerNames[1] or "None"
-}, function(value)
-    selectedServer = value
-end)
-
-selectedServer = initialServerNames[1]
 
 -- Join Saved Server Button
 ServerSection:CreateButton("Join Saved Server", function()
