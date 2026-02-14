@@ -42,7 +42,7 @@ pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Sean
 --================================--
 print("[SPOOKY HUB] Loading Spookalicious V4 library...")
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SPOOKY%20API%20TESTING"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
 
 -- No addons needed! SaveConfig, LoadConfig, CreateLabel, CreateDivider
 -- are all built natively into the API now.
