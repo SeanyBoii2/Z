@@ -28,7 +28,7 @@
 --  The API is a single file. Load it with HttpGet.
 --  It returns a Library table that you use to create your window.
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SPOOKY%20API%20TESTING"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
 
 --  The API is hosted above. It loads the full Spookalicious V4 library.
 --  Everything below uses it — just add your own pages!
