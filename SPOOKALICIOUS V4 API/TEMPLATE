@@ -1,522 +1,437 @@
 --[[
-    ================================================================
-    ║              SPOOKALICIOUS V4 ULTRA TEMPLATE                ║
-    ║                 BUILD YOUR SCRIPT HERE                      ║
-    ================================================================
-    
-    This is a TEMPLATE - a starting framework for your script.
-    
-    ✓ Choose which pages you need (Combat/Visuals/Movement/etc)
-    ✓ Delete sections you don't need
-    ✓ Add your code where marked "ADD YOUR CODE HERE"
-    ✓ Customize freely - it's YOUR script!
-    
-    📖 INSTRUCTIONS:
-    1. Update CONFIGURATION section below (URLs, name, etc)
-    2. Browse through the example pages
-    3. Keep pages you want, delete ones you don't
-    4. Replace "-- ADD YOUR CODE HERE" with your logic
-    5. Test frequently as you build!
-    
-    📚 NEED HELP?
-    - Read QUICK_START.md for step-by-step guide
-    - Check INTEGRATION_GUIDE.md for API reference
-    - See Usage_Examples.lua for more examples
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║               SPOOKALICIOUS V4 — DEVELOPER TEMPLATE                          ║
+║                                                                              ║
+║   This template shows you how to build a full hub using the                  ║
+║   Spookalicious V4 API. It comes pre-loaded with:                            ║
+║                                                                              ║
+║     • Config page   — Save/load settings across sessions                     ║
+║     • Server page   — Server tools, rejoin, reset                            ║
+║     • Misc page     — Utilities and info                                     ║
+║     • Settings      — Built into the API (theme, sounds, particles)          ║
+║                                                                              ║
+║   Just add your own pages using the examples below!                          ║
+║                                                                              ║
+║   CONTROLS:                                                                  ║
+║     PC:     LEFT ALT = open/close, Arrow keys = navigate                     ║
+║             F/Enter = select, X = back, V = mouse mode                       ║
+║     Mobile: Skull button = open, swipe = navigate, tap = select              ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 --]]
 
---================================--
---    CONFIGURATION - EDIT THIS   --
---================================--
 
--- 1. YOUR SCRIPT INFO
-local SCRIPT_NAME = "MY SCRIPT"        -- ← Change this!
-local VERSION = "v1.0"                 -- ← Change this!
-local DISCORD = "spookyie"
+--══════════════════════════════════════════════════════════════
+--  STEP 1: LOAD THE LIBRARY
+--══════════════════════════════════════════════════════════════
+--  The API is a single file. Load it with HttpGet.
+--  It returns a Library table that you use to create your window.
 
--- 2. YOUR GITHUB RAW URLS
--- After uploading files to GitHub:
--- - Click on each file → Click "Raw" button → Copy that URL
-local LIBRARY_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"
-local CONFIG_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/ConfigSystem_Addon.lua"
-local ELEMENTS_URL = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/NewElements_Addon.lua"
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SPOOKY%20API%20TESTING"))()
 
---================================--
---         LOAD LIBRARY           --
--- (DON'T EDIT THIS SECTION)      --
---================================--
-print("[" .. SCRIPT_NAME .. "] Loading library...")
+--  The API is hosted above. It loads the full Spookalicious V4 library.
+--  Everything below uses it — just add your own pages!
 
-local Library = loadstring(game:HttpGet(LIBRARY_URL))()
-local ConfigSystem = loadstring(game:HttpGet(CONFIG_URL))()
-local NewElements = loadstring(game:HttpGet(ELEMENTS_URL))()
 
-print("[" .. SCRIPT_NAME .. "] Library loaded!")
+--══════════════════════════════════════════════════════════════
+--  STEP 2: CREATE THE WINDOW
+--══════════════════════════════════════════════════════════════
+--  CreateWindow(title, version)
+--    title:   shown in the header (string)
+--    version: shown below the title (string)
+--
+--  This also triggers the intro animation.
 
---================================--
---        SETUP WINDOW            --
--- (DON'T EDIT THIS SECTION)      --
---================================--
-NewElements.Extend(Library)
-local Window = Library:CreateWindow(SCRIPT_NAME, VERSION)
-ConfigSystem:Attach(Window)
-Window:SetAutoSave(true)
+local Window = Library:CreateWindow("MY HUB", "V1.0")  -- ← change title and version
 
---================================--
---         SERVICES               --
--- (ADD MORE IF YOU NEED THEM)    --
---================================--
+--  The Window object has these methods:
+--    Window:CreatePage(name)    → returns a Page object
+--    Window:Toggle()            → open/close the menu
+--    Window:Show()              → open the menu
+--    Window:Hide()              → close the menu
+--    Window:Notify(message)     → show a toast notification
+--    Window:Destroy()           → destroy the entire GUI
+--    Window:SaveConfig(name)    → save all settings to file
+--    Window:LoadConfig(name)    → load settings from file
+--    Window:GetProfiles()       → list all saved profiles
+--    Window:ExportConfig(name)  → copy config JSON to clipboard
+--    Window:DeleteConfig(name)  → delete a saved profile
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 3: SERVICES (grab what you need)
+--══════════════════════════════════════════════════════════════
+
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
+local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
 
---============================================================================--
---                                                                            --
---                        📄 YOUR PAGES START HERE                           --
---                                                                            --
--- INSTRUCTIONS:                                                              --
--- - Each section below is a complete PAGE example                           --
--- - Keep the pages you want                                                 --
--- - Delete entire page sections you don't need                              --
--- - Add your code where it says "-- ADD YOUR CODE HERE ▼"                   --
--- - Uncomment code examples where you see "--[[ ... --]]"                   --
---                                                                            --
---============================================================================--
+local function sendNotification(title, text)
+    for i = 1, 10 do
+        local success = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 5,
+            })
+        end)
+        if success then break end
+        task.wait(0.5)
+    end
+end
+
+-- Track toggles that should reset to OFF/default when config loads
+-- (prevents movement features auto-activating on rejoin)
+local functionalToggles = {}
+
+local function registerFunctionalToggle(toggle, defaultState)
+    table.insert(functionalToggles, { ref = toggle, default = defaultState or false })
+end
+
+local function resetFunctionalToggles()
+    for _, item in ipairs(functionalToggles) do
+        item.ref:Set(item.default)
+    end
+end
+
+
+--[[
+══════════════════════════════════════════════════════════════════
+   ELEMENT REFERENCE — EVERY ELEMENT TYPE YOU CAN CREATE
+══════════════════════════════════════════════════════════════════
+
+   All elements are created on a Section object.
+   The pattern is always:  Section:CreateType(label, options, callback)
+
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ TOGGLE      │ On/off switch                                │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateToggle(label, opts, callback)  │
+   │ Options:    │ { Toggled = false }                          │
+   │ Callback:   │ function(value)  -- true or false            │
+   │ Returns:    │ { Set(val), Get() }                          │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ SLIDER      │ Number picker with min/max/step              │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateSlider(label, opts, callback)  │
+   │ Options:    │ { Min=0, Max=100, DefaultValue=50, Step=1 }  │
+   │ Callback:   │ function(value)  -- number                   │
+   │ Returns:    │ { Set(val), Get() }                          │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ BUTTON      │ Clickable action                             │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateButton(label, callback)        │
+   │ Callback:   │ function()  -- fires on click                │
+   │ Returns:    │ element table                                │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ TEXTBOX     │ Text input field                             │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateTextbox(label, placeholder, cb)│
+   │ Callback:   │ function(text)  -- string                    │
+   │ Returns:    │ { Set(val), Get() }                          │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ DROPDOWN    │ Selection from a list                        │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateDropdown(label, opts, callback)│
+   │ Options:    │ { List={"A","B","C"}, Default="A" }          │
+   │ Callback:   │ function(value)  -- selected string          │
+   │ Returns:    │ { Set(val), Get(), Clear(), Add(list),       │
+   │             │   Refresh(newList) }                         │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ KEYBIND     │ Bindable key shortcut                        │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateKeybind(label, opts, callback) │
+   │ Options:    │ { Default = Enum.KeyCode.F }  -- or nil      │
+   │ Callback:   │ function(key)  -- fires when key pressed     │
+   │ Returns:    │ { Set(key), Get() }                          │
+   │ Note:       │ Keybind fires when menu is CLOSED.           │
+   │             │ Press key in menu to rebind, ESC to unbind.  │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ LABEL       │ Non-interactive text line                    │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateLabel(text)                    │
+   │ Note:       │ Cannot be selected. Just displays text.      │
+   └─────────────┴──────────────────────────────────────────────┘
+
+   ┌─────────────┬──────────────────────────────────────────────┐
+   │ DIVIDER     │ Visual separator line                        │
+   ├─────────────┼──────────────────────────────────────────────┤
+   │ Create:     │ Section:CreateDivider()                      │
+   │ Note:       │ Thin line between elements for organization. │
+   └─────────────┴──────────────────────────────────────────────┘
+
+
+   CONFIG SYSTEM — WHAT GETS SAVED:
+   ──────────────────────────────────
+   ✓ Saved:  Toggles, Sliders, Dropdowns, Textboxes, Keybinds
+   ✗ Skipped: Buttons, Labels, Dividers (no persistent state)
+   ✓ Also saved: Theme color, sounds, particles, scanlines, opacity
+
+   Toggle:Set() calls the callback automatically, so when a config
+   loads, the callbacks fire and your features activate properly.
+
+
+══════════════════════════════════════════════════════════════════
+--]]
+
+
+--══════════════════════════════════════════════════════════════
+--  YOUR PAGES GO HERE  ↓↓↓
+--══════════════════════════════════════════════════════════════
+--  Pages appear in the order you create them.
+--  The "Settings" page is automatically added by the API at the end.
+--
+--  STRUCTURE:
+--    Window → Page → Section → Elements
+--
+--  Example:
+--    local MyPage = Window:CreatePage("My Page")
+--    local MySection = MyPage:CreateSection("Section Name")
+--    MySection:CreateToggle("My Toggle", { Toggled = false }, function(v) ... end)
+
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │  ADD YOUR PAGES BELOW THIS LINE                            │
+-- │  (before the Server/Misc/Config pages)                     │
+-- └────────────────────────────────────────────────────────────┘
+
+
+
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │  ADD YOUR PAGES ABOVE THIS LINE                            │
+-- └────────────────────────────────────────────────────────────┘
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                          COMBAT PAGE (OPTIONAL)                          ║
---║                                                                          ║
---║  DELETE THIS ENTIRE SECTION IF YOU DON'T NEED COMBAT FEATURES           ║
+--║    ⚠️  EXAMPLES PAGE — DELETE THIS ENTIRE SECTION WHEN YOU'RE DONE  ⚠️   ║
+--║    This is just a reference showing every element type.                 ║
+--║    It's safe to delete everything between the ════ lines below.        ║
 --╚══════════════════════════════════════════════════════════════════════════╝
+-- ═══════════════ START DELETE ═══════════════
 
---[[
-    ┌─────────────────────────────────────────────────────────────┐
-    │  AIMBOT SECTION - Shows all element types                  │
-    │                                                             │
-    │  This demonstrates:                                         │
-    │  • Toggles                                                  │
-    │  • Sliders                                                  │
-    │  • Color Pickers (NEW!)                                     │
-    │  • Multi-Sliders (NEW!)                                     │
-    │  • Dropdowns                                                │
-    │  • Keybinds                                                 │
-    │  • Labels and Dividers (NEW!)                               │
-    └─────────────────────────────────────────────────────────────┘
---]]
+local ExamplePage = Window:CreatePage("Examples")
 
-local CombatPage = Window:CreatePage("Combat")
-local AimbotSection = CombatPage:CreateSection("Aimbot")
+-- ═══ Toggle Example ═══
+local ToggleSection = ExamplePage:CreateSection("Toggles")
 
--- Info label
-AimbotSection:CreateLabel("Configure your aimbot settings below")
-AimbotSection:CreateDivider()
+ToggleSection:CreateLabel("Toggles are on/off switches")
+ToggleSection:CreateDivider()
 
--- Main enable toggle
-local aimbotEnabled = AimbotSection:CreateToggle("Enable Aimbot", {
-    Toggled = false
+local myToggle = ToggleSection:CreateToggle("Example Toggle", {
+    Toggled = false         -- starting state
 }, function(value)
-    _G.AimbotEnabled = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    if value then
-        -- TODO: Start your aimbot
-        -- Example: startAimbot()
-        print("Aimbot enabled!")
-    else
-        -- TODO: Stop your aimbot
-        -- Example: stopAimbot()
-        print("Aimbot disabled!")
-    end
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+    -- value = true or false
+    Window:Notify("Toggle is now: " .. tostring(value))
 end)
 
--- FOV slider
-local fovSlider = AimbotSection:CreateSlider("FOV", {
-    Min = 10,
-    Max = 500,
-    DefaultValue = 120,
-    Step = 5
+-- You can control toggles from code:
+-- myToggle:Set(true)     -- turns it on (fires callback)
+-- myToggle:Get()         -- returns current value
+
+-- ═══ Slider Example ═══
+local SliderSection = ExamplePage:CreateSection("Sliders")
+
+SliderSection:CreateLabel("Sliders pick a number in a range")
+SliderSection:CreateDivider()
+
+local mySlider = SliderSection:CreateSlider("Speed Value", {
+    Min = 0,                -- minimum value
+    Max = 100,              -- maximum value
+    DefaultValue = 50,      -- starting value
+    Step = 5,               -- increment amount
 }, function(value)
-    _G.AimbotFOV = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Update your FOV circle size
-    -- Example: updateFOVCircle(value)
-    print("FOV:", value)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+    -- value = number between Min and Max
+    Window:Notify("Speed: " .. value)
 end)
 
--- FOV color picker (NEW ELEMENT!)
-local fovColor = AimbotSection:CreateColorPicker("FOV Color", {
-    Default = Color3.fromRGB(255, 255, 255)
-}, function(color)
-    _G.FOVColor = color
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Change FOV circle color
-    -- Example: fovCircle.Color = color
-    print("FOV Color:", color)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+-- You can control sliders from code:
+-- mySlider:Set(75)       -- sets value (fires callback)
+-- mySlider:Get()         -- returns current value
+
+-- ═══ Button Example ═══
+local ButtonSection = ExamplePage:CreateSection("Buttons")
+
+ButtonSection:CreateLabel("Buttons fire a function when clicked")
+ButtonSection:CreateDivider()
+
+ButtonSection:CreateButton("Click Me", function()
+    Window:Notify("Button was clicked!")
 end)
 
--- Target part dropdown
-local targetPart = AimbotSection:CreateDropdown("Target Part", {
-    List = {"Head", "Torso", "HumanoidRootPart"},
-    Default = "Head"
+ButtonSection:CreateButton("Print to Console", function()
+    print("Hello from Spookalicious!")
+end)
+
+-- ═══ Dropdown Example ═══
+local DropdownSection = ExamplePage:CreateSection("Dropdowns")
+
+DropdownSection:CreateLabel("Dropdowns let you pick from a list")
+DropdownSection:CreateDivider()
+
+local myDropdown = DropdownSection:CreateDropdown("Pick a Fruit", {
+    List = { "Apple", "Banana", "Cherry", "Grape" },
+    Default = "Apple",      -- starting selection
 }, function(value)
-    _G.TargetPart = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Set which body part to aim at
-    print("Targeting:", value)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+    -- value = selected string
+    Window:Notify("You picked: " .. value)
 end)
 
-AimbotSection:CreateDivider()
-AimbotSection:CreateLabel("Advanced Settings")
+-- You can control dropdowns from code:
+-- myDropdown:Set("Banana")                        -- select a value
+-- myDropdown:Get()                                -- get current value
+-- myDropdown:Add({"Mango", "Kiwi"})              -- add items to list
+-- myDropdown:Refresh({"New", "List", "Here"})     -- replace entire list
+-- myDropdown:Clear()                              -- empty the list
 
--- Prediction multi-slider (NEW ELEMENT!)
-local prediction = AimbotSection:CreateMultiSlider("Prediction", {
-    Labels = {"X", "Y", "Z"},
-    Defaults = {0, 0, 0},
-    Min = -5,
-    Max = 5,
-    Step = 0.1
-}, function(values)
-    _G.PredictionX = values[1]
-    _G.PredictionY = values[2]
-    _G.PredictionZ = values[3]
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Apply prediction to aimbot
-    print(string.format("Prediction - X:%.1f Y:%.1f Z:%.1f", values[1], values[2], values[3]))
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+-- ═══ Textbox Example ═══
+local TextboxSection = ExamplePage:CreateSection("Textboxes")
+
+TextboxSection:CreateLabel("Textboxes accept typed input")
+TextboxSection:CreateDivider()
+
+local myTextbox = TextboxSection:CreateTextbox("Username", "Enter name...", function(text)
+    -- text = string the user typed
+    Window:Notify("You typed: " .. text)
 end)
 
--- Aimbot keybind
-local aimbotKey = AimbotSection:CreateKeybind("Aimbot Key", {
-    Default = Enum.KeyCode.E
+-- You can control textboxes from code:
+-- myTextbox:Set("hello")    -- set the text
+-- myTextbox:Get()           -- get current text
+
+-- ═══ Keybind Example ═══
+local KeybindSection = ExamplePage:CreateSection("Keybinds")
+
+KeybindSection:CreateLabel("Keybinds trigger when key is pressed")
+KeybindSection:CreateLabel("(only fires when menu is CLOSED)")
+KeybindSection:CreateDivider()
+
+local myKeybind = KeybindSection:CreateKeybind("Action Key", {
+    Default = nil,           -- nil = unbound, or Enum.KeyCode.F etc.
 }, function(key)
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: This fires when the key is pressed
-    -- You might toggle aimbot or activate silent aim here
-    print("Aimbot key pressed:", key.Name)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+    -- fires when the bound key is pressed (menu must be closed)
+    print("Keybind pressed:", key.Name)
 end)
+
+-- You can control keybinds from code:
+-- myKeybind:Set(Enum.KeyCode.G)   -- bind to G key
+-- myKeybind:Get()                 -- get current key
+
+
+-- ═══════════════ END DELETE ═══════════════
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                         VISUALS PAGE (OPTIONAL)                          ║
---║                                                                          ║
---║  DELETE THIS ENTIRE SECTION IF YOU DON'T NEED ESP/VISUAL FEATURES       ║
+--║                   SERVER PAGE (do not modify)                          ║
 --╚══════════════════════════════════════════════════════════════════════════╝
 
---[[
-    ┌─────────────────────────────────────────────────────────────┐
-    │  ESP SECTION - Shows color pickers and visual settings     │
-    └─────────────────────────────────────────────────────────────┘
---]]
+local ServerPage = Window:CreatePage("Server")
+local ServerSection = ServerPage:CreateSection("Server Tools")
 
-local VisualsPage = Window:CreatePage("Visuals")
-local ESPSection = VisualsPage:CreateSection("ESP")
-
-ESPSection:CreateLabel("Customize ESP appearance")
-ESPSection:CreateDivider()
-
--- Enable ESP
-local espEnabled = ESPSection:CreateToggle("Enable ESP", {
-    Toggled = false
-}, function(value)
-    _G.ESPEnabled = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    if value then
-        -- TODO: Create ESP for all players
-        -- Example: createESP()
-        print("ESP enabled!")
-    else
-        -- TODO: Remove all ESP
-        -- Example: clearESP()
-        print("ESP disabled!")
+ServerSection:CreateTextbox("Chat Message", "Type message...", function(text)
+    if text and #text > 0 then
+        Window:Notify("Message: " .. text)
     end
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
 end)
 
--- Name color
-local nameColor = ESPSection:CreateColorPicker("Name Color", {
-    Default = Color3.fromRGB(255, 255, 255)
-}, function(color)
-    _G.ESPNameColor = color
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Update name text color in ESP
-    print("Name color:", color)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+ServerSection:CreateButton("Copy Server ID", function()
+    if setclipboard then
+        setclipboard(game.JobId)
+        Window:Notify("Server ID copied!")
+    else
+        Window:Notify("Clipboard not supported")
+    end
 end)
 
--- Box color
-local boxColor = ESPSection:CreateColorPicker("Box Color", {
-    Default = Color3.fromRGB(0, 255, 0)
-}, function(color)
-    _G.ESPBoxColor = color
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Update box outline color
-    print("Box color:", color)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+ServerSection:CreateButton("Rejoin Server", function()
+    Window:Notify("Rejoining...")
+    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
+    if syn and syn.queue_on_teleport then
+        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    elseif queue_on_teleport then
+        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    end
+    task.wait(0.5)
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end)
 end)
 
--- Health bar color
-local healthColor = ESPSection:CreateColorPicker("Health Bar", {
-    Default = Color3.fromRGB(255, 0, 0)
-}, function(color)
-    _G.ESPHealthColor = color
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Update health bar color
-    print("Health color:", color)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
-end)
-
-ESPSection:CreateDivider()
-
--- Text size
-local textSize = ESPSection:CreateSlider("Text Size", {
-    Min = 10,
-    Max = 30,
-    DefaultValue = 16,
-    Step = 1
-}, function(value)
-    _G.ESPTextSize = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Update ESP text size
-    print("Text size:", value)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
-end)
-
--- Max distance
-local maxDistance = ESPSection:CreateSlider("Max Distance", {
-    Min = 100,
-    Max = 5000,
-    DefaultValue = 1000,
-    Step = 50
-}, function(value)
-    _G.ESPMaxDistance = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Set max render distance for ESP
-    print("Max distance:", value)
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+ServerSection:CreateButton("Reset Character", function()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.Health = 0
+    end
+    Window:Notify("Character reset!")
 end)
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                        MOVEMENT PAGE (OPTIONAL)                          ║
---║                                                                          ║
---║  DELETE THIS ENTIRE SECTION IF YOU DON'T NEED MOVEMENT HACKS            ║
---╚══════════════════════════════════════════════════════════════════════════╝
-
---[[
-    ┌─────────────────────────────────────────────────────────────┐
-    │  MOVEMENT SECTION - Functional examples included!          │
-    │                                                             │
-    │  Some of these have working code - just uncomment!         │
-    └─────────────────────────────────────────────────────────────┘
---]]
-
-local MovementPage = Window:CreatePage("Movement")
-
--- ═══════════════════ SPEED SECTION ═══════════════════
-local SpeedSection = MovementPage:CreateSection("Speed")
-
-local speedEnabled = SpeedSection:CreateToggle("Enable Speed", {
-    Toggled = false
-}, function(value)
-    _G.SpeedEnabled = value
-    
-    -- ▼▼▼ WORKING CODE - Just uncomment! ▼▼▼
-    --[[
-    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        if value then
-            humanoid.WalkSpeed = _G.WalkSpeed or 16
-        else
-            humanoid.WalkSpeed = 16
-        end
-    end
-    --]]
-end)
-
-local walkSpeed = SpeedSection:CreateSlider("Walk Speed", {
-    Min = 16,
-    Max = 500,
-    DefaultValue = 16,
-    Step = 1
-}, function(value)
-    _G.WalkSpeed = value
-    
-    -- ▼▼▼ WORKING CODE - Just uncomment! ▼▼▼
-    --[[
-    if _G.SpeedEnabled then
-        local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = value
-        end
-    end
-    --]]
-end)
-
--- ═══════════════════ FLY SECTION ═══════════════════
-local FlySection = MovementPage:CreateSection("Fly")
-
-local flyEnabled = FlySection:CreateToggle("Enable Fly", {
-    Toggled = false
-}, function(value)
-    _G.FlyEnabled = value
-    
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    if value then
-        -- TODO: Start fly (create BodyVelocity, BodyGyro, etc.)
-        print("Fly enabled - add your fly logic!")
-    else
-        -- TODO: Stop fly (remove flight objects)
-        print("Fly disabled!")
-    end
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
-end)
-
-local flySpeed = FlySection:CreateSlider("Fly Speed", {
-    Min = 20,
-    Max = 400,
-    DefaultValue = 80,
-    Step = 5
-}, function(value)
-    _G.FlySpeed = value
-    print("Fly speed:", value)
-end)
-
--- ═══════════════════ JUMP SECTION ═══════════════════
-local JumpSection = MovementPage:CreateSection("Jump")
-
-local jumpPower = JumpSection:CreateSlider("Jump Power", {
-    Min = 50,
-    Max = 500,
-    DefaultValue = 50,
-    Step = 5
-}, function(value)
-    -- ▼▼▼ WORKING CODE - Just uncomment! ▼▼▼
-    --[[
-    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        humanoid.JumpPower = value
-    end
-    --]]
-end)
-
-local infJump = JumpSection:CreateToggle("Infinite Jump", {
-    Toggled = false
-}, function(value)
-    _G.InfJumpEnabled = value
-end)
-
--- ▼▼▼ WORKING CODE - Just uncomment! ▼▼▼
---[[
-UserInputService.JumpRequest:Connect(function()
-    if _G.InfJumpEnabled then
-        local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end
-end)
---]]
-
--- ═══════════════════ NOCLIP SECTION ═══════════════════
-local NoclipSection = MovementPage:CreateSection("Noclip")
-
-local noclipEnabled = NoclipSection:CreateToggle("Noclip", {
-    Toggled = false
-}, function(value)
-    _G.NoclipEnabled = value
-end)
-
--- ▼▼▼ WORKING CODE - Just uncomment! ▼▼▼
---[[
-RunService.Stepped:Connect(function()
-    if _G.NoclipEnabled and player.Character then
-        for _, part in ipairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
---]]
-
-
---╔══════════════════════════════════════════════════════════════════════════╗
---║                           MISC PAGE (OPTIONAL)                           ║
---║                                                                          ║
---║  KEEP THIS - It has useful utilities! Or delete if you don't need it    ║
+--║                   MISC PAGE (do not modify)                            ║
 --╚══════════════════════════════════════════════════════════════════════════╝
 
 local MiscPage = Window:CreatePage("Misc")
+
+-- ═══ Utilities ═══
 local UtilSection = MiscPage:CreateSection("Utilities")
 
--- Rejoin button (Working!)
-UtilSection:CreateButton("Rejoin Server", function()
-    Window:Notify("Rejoining...")
-    task.wait(0.5)
-    game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+local antiAfkToggle = UtilSection:CreateToggle("Anti-AFK", {
+    Toggled = true
+}, function(value)
+    Window:Notify("Anti-AFK: " .. (value and "ON" or "OFF"))
+end)
+registerFunctionalToggle(antiAfkToggle, true)
+
+player.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- Server hop button
-UtilSection:CreateButton("Server Hop", function()
-    -- ▼▼▼ ADD YOUR CODE HERE ▼▼▼
-    -- TODO: Add server hop logic
-    Window:Notify("Server hopping...")
-    print("Add server hop code here!")
-    -- ▲▲▲ ADD YOUR CODE HERE ▲▲▲
+UtilSection:CreateButton("Copy Discord", function()
+    if setclipboard then
+        setclipboard("spookyie")
+        Window:Notify("Discord copied: spookyie")
+    else
+        Window:Notify("Discord: spookyie")
+    end
+end)
+
+UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
+    Window:Notify("Webhook saved!")
 end)
 
 UtilSection:CreateDivider()
 
--- Anti-AFK toggle
-local antiAFK = UtilSection:CreateToggle("Anti-AFK", {
-    Toggled = true
-}, function(value)
-    _G.AntiAFK = value
-end)
-
--- ▼▼▼ WORKING CODE - Already active! ▼▼▼
-local VirtualUser = game:GetService("VirtualUser")
-player.Idled:Connect(function()
-    if _G.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
-end)
-
--- Info section
+-- ═══ Information ═══
 local InfoSection = MiscPage:CreateSection("Information")
 
-InfoSection:CreateLabel("Script: " .. SCRIPT_NAME .. " " .. VERSION)
-InfoSection:CreateLabel("Discord: " .. DISCORD)
+InfoSection:CreateLabel("Script: MY HUB V1.0")              -- ← change script name only
+InfoSection:CreateLabel("Discord: spookyie")
 InfoSection:CreateDivider()
 
-InfoSection:CreateButton("Copy Discord", function()
-    if setclipboard then
-        setclipboard(DISCORD)
-        Window:Notify("Discord copied!")
-    else
-        Window:Notify("Discord: " .. DISCORD)
-    end
+InfoSection:CreateButton("Credits", function()
+    Window:Notify("Made by Spooky // Discord: spookyie")
 end)
 
 InfoSection:CreateButton("Destroy GUI", function()
+    pcall(function() Window:SaveConfig("Default") end)
     Window:Notify("Goodbye!")
     task.wait(1)
     Window:Destroy()
@@ -524,183 +439,159 @@ end)
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                     CONFIG PAGE (KEEP THIS!)                             ║
---║                                                                          ║
---║  DON'T DELETE - This lets users save/load their settings                ║
+--║                  CONFIG PAGE (do not modify)                           ║
 --╚══════════════════════════════════════════════════════════════════════════╝
+--  This gives users Save/Load buttons.
+--  The config system saves: toggles, sliders, dropdowns, textboxes, keybinds
+--  AND UI settings (theme, sounds, particles, opacity, etc.)
+--
+--  Requires your executor to support writefile/readfile.
+--  If not available, configs persist within the session only.
 
 local ConfigPage = Window:CreatePage("Config")
-local SaveLoadSection = ConfigPage:CreateSection("Profiles")
+local ConfigSection = ConfigPage:CreateSection("Save & Load")
 
-SaveLoadSection:CreateLabel("Save and load your settings")
-SaveLoadSection:CreateDivider()
+ConfigSection:CreateLabel("Save your settings to persist across sessions")
+ConfigSection:CreateDivider()
 
--- Save config
-SaveLoadSection:CreateButton("Save Config", function()
-    local profileName = "Config_" .. os.date("%H%M%S")
-    Window:SaveConfig(profileName)
-    Window:Notify("Saved: " .. profileName)
+local currentProfile = "Default"
+
+ConfigSection:CreateTextbox("Profile Name", "Default", function(text)
+    if text and #text > 0 then
+        currentProfile = text
+    end
 end)
 
--- Load config
-SaveLoadSection:CreateButton("Load Config", function()
-    local profiles = Window:GetProfiles()
-    
-    if #profiles == 0 then
-        Window:Notify("No saved profiles")
-        return
-    end
-    
-    print("=== Available Profiles ===")
-    for i, name in ipairs(profiles) do
-        print(i .. ". " .. name)
-    end
-    
-    Window:Notify("Check console for profiles")
-    Window:LoadConfig(profiles[1])
-    Window:Notify("Loaded: " .. profiles[1])
+ConfigSection:CreateDivider()
+
+ConfigSection:CreateButton("Save Config", function()
+    local ok = Window:SaveConfig(currentProfile)
+    Window:Notify(ok and ("Saved: " .. currentProfile) or "Save failed!")
 end)
 
--- List profiles
-SaveLoadSection:CreateButton("List Profiles", function()
-    local profiles = Window:GetProfiles()
-    
-    if #profiles == 0 then
-        Window:Notify("No saved profiles")
+ConfigSection:CreateButton("Load Config", function()
+    local ok = Window:LoadConfig(currentProfile)
+    if ok then
+        task.wait(0.1)
+        resetFunctionalToggles() -- safety: reset movement features
+        Window:Notify("Loaded: " .. currentProfile)
     else
-        print("=== Saved Profiles ===")
-        for i, name in ipairs(profiles) do
-            print(i .. ". " .. name)
-        end
-        Window:Notify(#profiles .. " profiles (check console)")
+        Window:Notify("No config found: " .. currentProfile)
     end
 end)
 
-SaveLoadSection:CreateDivider()
-
--- Export
-SaveLoadSection:CreateButton("Export to Clipboard", function()
-    Window:ExportConfig()
-    Window:Notify("Config copied to clipboard!")
+ConfigSection:CreateButton("Delete Config", function()
+    Window:DeleteConfig(currentProfile)
+    Window:Notify("Deleted: " .. currentProfile)
 end)
 
--- Settings
-local SettingsSection = ConfigPage:CreateSection("Settings")
+ConfigSection:CreateDivider()
 
-local autoSave = SettingsSection:CreateToggle("Auto-Save", {
-    Toggled = true
-}, function(value)
-    Window:SetAutoSave(value)
-    Window:Notify("Auto-save: " .. (value and "ON" or "OFF"))
+ConfigSection:CreateButton("List Profiles", function()
+    local profiles = Window:GetProfiles()
+    if #profiles > 0 then
+        Window:Notify(table.concat(profiles, ", "))
+    else
+        Window:Notify("No saved profiles")
+    end
 end)
 
-SettingsSection:CreateLabel("Auto-save changes to current profile")
+ConfigSection:CreateButton("Export to Clipboard", function()
+    local ok = Window:ExportConfig(currentProfile)
+    Window:Notify(ok and "Copied to clipboard!" or "Export failed")
+end)
+
+ConfigSection:CreateDivider()
+ConfigSection:CreateLabel(_hasFS and "Saves to: SpookyHub_Configs/" or "No file system — session only!")
 
 
---╔══════════════════════════════════════════════════════════════════════════╗
---║                           INITIALIZATION                                 ║
---║                                                                          ║
---║  This loads the default config and shows welcome message                ║
---╚══════════════════════════════════════════════════════════════════════════╝
+--══════════════════════════════════════════════════════════════
+--  STEP 4: INITIALIZATION
+--══════════════════════════════════════════════════════════════
+--  This runs after all pages are created.
+--  It auto-loads saved config and resets dangerous toggles.
 
--- Load or create default profile
-task.wait(1)
-local profiles = Window:GetProfiles()
-if table.find(profiles, "Default") then
-    Window:LoadConfig("Default")
-    print("[" .. SCRIPT_NAME .. "] Loaded default profile")
+task.wait(0.5)
+
+-- Auto-load saved config
+local loaded = Window:LoadConfig("Default")
+if loaded then
+    print("[HUB] Config loaded!")
 else
+    print("[HUB] No saved config — saving defaults")
     Window:SaveConfig("Default")
-    print("[" .. SCRIPT_NAME .. "] Created default profile")
 end
 
--- Welcome notification
-Window:Notify("Welcome to " .. SCRIPT_NAME .. "!")
+-- Safety: always reset functional toggles after loading
+resetFunctionalToggles()
 
--- Console output
-print("═══════════════════════════════════════════")
-print("  " .. SCRIPT_NAME .. " " .. VERSION)
-print("═══════════════════════════════════════════")
-print("✓ Loaded successfully")
-print("✓ Config system active")
-print("✓ New elements available")
-print("───────────────────────────────────────────")
-print("Press LEFT ALT to open menu")
-print("Press F or SPACE to select")
-print("Discord: " .. DISCORD)
-print("═══════════════════════════════════════════")
-
-
---╔══════════════════════════════════════════════════════════════════════════╗
---║                        YOUR CUSTOM LOGIC                                 ║
---║                                                                          ║
---║  Add your main loops, handlers, and logic here                          ║
---╚══════════════════════════════════════════════════════════════════════════╝
-
---[[
-    ┌─────────────────────────────────────────────────────────────┐
-    │  Add your script's main logic below                        │
-    │                                                             │
-    │  Examples:                                                  │
-    │  • Aimbot loop                                              │
-    │  • ESP update loop                                          │
-    │  • Auto-farm logic                                          │
-    │  • Event connections                                        │
-    └─────────────────────────────────────────────────────────────┘
---]]
-
--- Example: Aimbot loop
---[[
-task.spawn(function()
-    while true do
-        task.wait()
-        
-        if _G.AimbotEnabled then
-            -- Your aimbot logic here
-            -- Example: findClosestPlayer(), aimAt(player), etc.
-        end
-    end
+-- Auto-save when leaving
+game:BindToClose(function()
+    pcall(function() Window:SaveConfig("Default") end)
 end)
---]]
 
--- Example: ESP loop
+print("[HUB] Ready!")
+
+
 --[[
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        
-        if _G.ESPEnabled then
-            -- Your ESP update logic here
-            -- Example: updateESP(), refreshPlayerList(), etc.
-        end
-    end
-end)
+══════════════════════════════════════════════════════════════════
+   QUICK-START CHEATSHEET
+══════════════════════════════════════════════════════════════════
+
+   ADD A NEW PAGE:
+   ────────────────
+   local MyPage = Window:CreatePage("Page Name")
+   local MySection = MyPage:CreateSection("Section Name")
+
+
+   ADD ELEMENTS TO A SECTION:
+   ──────────────────────────
+   MySection:CreateLabel("Some text")
+   MySection:CreateDivider()
+   MySection:CreateToggle("Name", { Toggled = false }, function(v) end)
+   MySection:CreateSlider("Name", { Min=0, Max=100, DefaultValue=50, Step=1 }, function(v) end)
+   MySection:CreateButton("Name", function() end)
+   MySection:CreateTextbox("Name", "placeholder...", function(text) end)
+   MySection:CreateDropdown("Name", { List={"A","B"}, Default="A" }, function(v) end)
+   MySection:CreateKeybind("Name", { Default=nil }, function(key) end)
+
+
+   MAKE A TOGGLE RESET ON CONFIG LOAD:
+   ────────────────────────────────────
+   local toggle = MySection:CreateToggle(...)
+   registerFunctionalToggle(toggle, false)   -- false = resets to OFF
+   registerFunctionalToggle(toggle, true)    -- true = resets to ON
+
+
+   SHOW A NOTIFICATION:
+   ────────────────────
+   Window:Notify("Hello!")
+
+
+   SAVE/LOAD CONFIG FROM CODE:
+   ───────────────────────────
+   Window:SaveConfig("MyProfile")
+   Window:LoadConfig("MyProfile")
+
+
+   MULTIPLE SECTIONS ON ONE PAGE:
+   ──────────────────────────────
+   local Page = Window:CreatePage("My Page")
+   local Section1 = Page:CreateSection("First Section")
+   Section1:CreateToggle(...)
+   local Section2 = Page:CreateSection("Second Section")
+   Section2:CreateButton(...)
+
+
+   SCRIPT LOADER PATTERN:
+   ──────────────────────
+   local loaded = {}
+   MySection:CreateButton("Load Script", function()
+       if loaded["script1"] then return end
+       loaded["script1"] = true
+       loadstring(game:HttpGet("URL"))()
+       Window:Notify("Loaded!")
+   end)
+
+══════════════════════════════════════════════════════════════════
 --]]
-
--- Example: Character respawn handler
---[[
-player.CharacterAdded:Connect(function(character)
-    task.wait(1)
-    
-    -- Reapply settings after respawn
-    if _G.SpeedEnabled then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = _G.WalkSpeed or 16
-        end
-    end
-end)
---]]
-
--- ▼▼▼ ADD YOUR MAIN SCRIPT LOGIC HERE ▼▼▼
-
-
-
-
--- ▲▲▲ ADD YOUR MAIN SCRIPT LOGIC HERE ▲▲▲
-
-print("[" .. SCRIPT_NAME .. "] All systems ready!")
-
---╔══════════════════════════════════════════════════════════════════════════╗
---║                              END OF TEMPLATE                             ║
---╚══════════════════════════════════════════════════════════════════════════╝
