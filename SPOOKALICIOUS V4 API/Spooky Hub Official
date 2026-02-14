@@ -81,7 +81,7 @@ end
 --================================--
 local Window
 pcall(function()
-    Window = Library:CreateWindow("SPOOKY HUB", "V4")
+    Window = Library:CreateWindow("SPOOKALICIOUS HUB", "V4")
 end)
 
 if not Window then
@@ -677,6 +677,13 @@ UtilSection:CreateButton("Copy Discord", function()
     else
         Window:Notify("Discord: spookyie")
     end
+end)
+
+UtilSection:CreateButton("Load Spookalicious Hub", function()
+    Window:Notify("Loading Spookalicious Hub...")
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/Spooky%20Hub%20Official"))()
+    end)
 end)
 
 UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
