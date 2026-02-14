@@ -34,25 +34,32 @@ local SCRIPT_URL = "YOUR_SCRIPT_URL_HERE"  -- ← CHANGE THIS!
 -- Setup queue function (works with Solara and other executors)
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 
-if queueteleport then
-    print("[AUTO-RELOAD] Queue function found and ready")
-else
-    warn("[AUTO-RELOAD] No queue function available - auto-reload disabled")
-end
-
 
 --══════════════════════════════════════════════════════════════
 --  STEP 2: LOAD THE LIBRARY
 --══════════════════════════════════════════════════════════════
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+local Library
+pcall(function()
+    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+end)
+
+if not Library then
+    task.wait(0.5)
+    pcall(function()
+        Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+    end)
+end
 
 
 --══════════════════════════════════════════════════════════════
 --  STEP 3: CREATE THE WINDOW
 --══════════════════════════════════════════════════════════════
 
-local Window = Library:CreateWindow("MY HUB", "V1.0")  -- ← change title and version
+local Window
+pcall(function()
+    Window = Library:CreateWindow("MY HUB", "V1.0")
+end)
 
 
 --══════════════════════════════════════════════════════════════
@@ -139,7 +146,6 @@ ServerSection:CreateButton("Rejoin Server", function()
         pcall(function()
             queueteleport(queueCode)
         end)
-        print("[REJOIN] Script queued successfully")
     end
     
     -- Small delay then teleport
@@ -158,7 +164,6 @@ ServerSection:CreateButton("Server Hop", function()
         pcall(function()
             queueteleport(queueCode)
         end)
-        print("[SERVER HOP] Script queued")
     end
     
     -- Get list of servers and join a different one
@@ -183,7 +188,6 @@ ServerSection:CreateButton("Server Hop", function()
     end)
     
     if not success then
-        warn("[SERVER HOP] Error:", result)
         Window:Notify("Server hop failed!")
     end
 end)
@@ -200,7 +204,7 @@ ServerSection:CreateDivider()
 -- ═══════════════════════════════════════════════════════════
 --  SERVER SAVER SYSTEM
 -- ═══════════════════════════════════════════════════════════
-local FILE_NAME = "SavedServers_MyHub.json"  -- ← Change this name for your hub
+local FILE_NAME = "SavedServers_MyHub.json"
 
 -- Save/Load System
 local function saveServerData(data)
@@ -353,6 +357,13 @@ UtilSection:CreateButton("Copy Discord", function()
     end
 end)
 
+UtilSection:CreateButton("Load Spookalicious Hub", function()
+    Window:Notify("Loading Spookalicious Hub...")
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/Spooky%20Hub%20Official"))()
+    end)
+end)
+
 UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
     Window:Notify("Webhook saved!")
 end)
@@ -362,7 +373,7 @@ UtilSection:CreateDivider()
 -- ═══ Information ═══
 local InfoSection = MiscPage:CreateSection("Information")
 
-InfoSection:CreateLabel("Script: MY HUB V1.0")              -- ← change script name only
+InfoSection:CreateLabel("Script: MY HUB V1.0")
 InfoSection:CreateLabel("Discord: spookyie")
 InfoSection:CreateDivider()
 
