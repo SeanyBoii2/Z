@@ -6,14 +6,6 @@
 --]]
 
 --================================--
---       WHITELIST SYSTEM         --
---================================--
-local WHITELISTED_USERS = {
-    "ULTIMATEGODLUFFY",
-    "ModeratorJuli2",
-}
-
---================================--
 --          SERVICES              --
 --================================--
 local Players = game:GetService("Players")
@@ -40,25 +32,6 @@ local function sendNotification(title, text)
         if success then break end
         task.wait(0.5)
     end
-end
-
---================================--
---       WHITELIST CHECK          --
---================================--
-print("Player Name: " .. player.Name)
-
-local isWhitelisted = false
-for _, name in ipairs(WHITELISTED_USERS) do
-    if string.lower(player.Name) == string.lower(name) then
-        isWhitelisted = true
-        break
-    end
-end
-
-if not isWhitelisted then
-    sendNotification("ACCESS DENIED", "You are not whitelisted. Discord: spookyie")
-    print("ACCESS DENIED - Username not in whitelist: " .. player.Name)
-    return
 end
 
 sendNotification("WELCOME", "Welcome " .. player.Name .. "!")
@@ -113,10 +86,57 @@ local flyBodyGyro = nil
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                          SCRIPTS PAGE                                    ║
+--║                       GAME SCRIPTS PAGE                                  ║
 --╚══════════════════════════════════════════════════════════════════════════╝
 
-local SCRIPTS = {
+local GAME_SCRIPTS = {
+	{
+		Name = "Michales Zombies",
+		URL = "https://raw.githubusercontent.com/PLACEHOLDER/PLACEHOLDER/main/MichalesZombies.lua",
+	},
+	{
+		Name = "Zombies 2",
+		URL = "https://raw.githubusercontent.com/PLACEHOLDER/PLACEHOLDER/main/Zombies2.lua",
+	},
+}
+
+local GameScriptsPage = Window:CreatePage("Game Scripts")
+local GameScriptsSection = GameScriptsPage:CreateSection("Game-Specific Scripts")
+
+GameScriptsSection:CreateLabel("Load game-specific scripts below")
+GameScriptsSection:CreateDivider()
+
+for _, scriptData in ipairs(GAME_SCRIPTS) do
+    GameScriptsSection:CreateButton(scriptData.Name, function()
+        if loadedScripts[scriptData.Name] then
+            Window:Notify(scriptData.Name .. " already loaded!")
+            return
+        end
+
+        Window:Notify("Loading " .. scriptData.Name .. "...")
+
+        local success, err = pcall(function()
+            loadstring(game:HttpGet(scriptData.URL))()
+        end)
+
+        if success then
+            loadedScripts[scriptData.Name] = true
+            Window:Notify(scriptData.Name .. " loaded!")
+            sendNotification("Loaded", scriptData.Name .. " loaded successfully!")
+        else
+            Window:Notify("ERROR: " .. scriptData.Name .. " failed!")
+            sendNotification("Error", "Failed to load " .. scriptData.Name)
+            warn("Load error: " .. tostring(err))
+        end
+    end)
+end
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                     UNIVERSAL SCRIPTS PAGE                               ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local UNIVERSAL_SCRIPTS = {
 	{
 		Name = "Motorcycle Tricks",
 		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Motorcycle%20Tricks%20Universal.txt",
@@ -142,19 +162,19 @@ local SCRIPTS = {
 		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Server%20Saver",
 	},
     {
-		Name = "Hitbox Expander + Triggerbot f",
+		Name = "Hitbox Expander + Triggerbot",
 		URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot",
 	},
 }
 
-local ScriptsPage = Window:CreatePage("Scripts")
-local ScriptSection = ScriptsPage:CreateSection("Script Loader")
+local UniversalScriptsPage = Window:CreatePage("Universal Scripts")
+local UniversalScriptSection = UniversalScriptsPage:CreateSection("Universal Script Loader")
 
-ScriptSection:CreateLabel("Load universal scripts below")
-ScriptSection:CreateDivider()
+UniversalScriptSection:CreateLabel("Load universal scripts below")
+UniversalScriptSection:CreateDivider()
 
-for _, scriptData in ipairs(SCRIPTS) do
-    ScriptSection:CreateButton(scriptData.Name, function()
+for _, scriptData in ipairs(UNIVERSAL_SCRIPTS) do
+    UniversalScriptSection:CreateButton(scriptData.Name, function()
         if loadedScripts[scriptData.Name] then
             Window:Notify(scriptData.Name .. " already loaded!")
             return
@@ -597,7 +617,7 @@ print("════════════════════════�
 print("  SPOOKY HUB V4")
 print("═══════════════════════════════════════════")
 print("✓ Loaded successfully")
-print("✓ Whitelist verified: " .. player.Name)
+print("✓ Player: " .. player.Name)
 print("✓ Config system active")
 print("✓ New elements active")
 print("✓ All features ready")
@@ -607,7 +627,8 @@ print("Press F or SPACE to select")
 print("Discord: spookyie")
 print("───────────────────────────────────────────")
 print("Pages:")
-print("  - Scripts (6 loaders)")
+print("  - Game Scripts (2 loaders)")
+print("  - Universal Scripts (7 loaders)")
 print("  - Movement (Speed, Fly, Jump, Noclip)")
 print("  - Server (Tools & rejoin)")
 print("  - Misc (Utilities)")
