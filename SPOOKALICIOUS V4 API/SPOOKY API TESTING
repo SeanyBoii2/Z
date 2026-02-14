@@ -1261,7 +1261,14 @@ local function getItemHeight(item)
     elseif item.type == "keybind" then return H_KEYBIND
     elseif item.type == "section_header" then return H_SECTION
     elseif item.type == "page_link" then return H_PAGE
+    elseif item.type == "label" then return H_ITEM
+    elseif item.type == "divider" then return 12
     else return H_ITEM end
+end
+
+-- Non-interactive types that should be skipped during keyboard nav
+local function isNonInteractive(itemType)
+    return itemType == "section_header" or itemType == "label" or itemType == "divider"
 end
 
 -- Forward declare
@@ -1713,10 +1720,33 @@ local function createItemUI(index, item, yPos)
             ZIndex = 27,
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
+
+    elseif item.type == "label" then
+        local lbl = makeLabel(frame, {
+            Size = UDim2.new(1, -14, 1, 0),
+            Position = UDim2.new(0, 7, 0, 0),
+            TextSize = 13,
+            TextColor3 = c.accentDim,
+            Text = item.label or "",
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 27,
+        })
+        addStroke(lbl, c.bg, 0.8, 0.5, Enum.ApplyStrokeMode.Contextual)
+
+    elseif item.type == "divider" then
+        local line = makeFrame(frame, {
+            Size = UDim2.new(1, -24, 0, 1),
+            Position = UDim2.new(0, 12, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = c.border,
+            BackgroundTransparency = 0.55,
+            ZIndex = 27,
+        })
+        addCorner(line, 1)
     end
 
     -- Click zone (always works, keyboard mode AND mouse mode)
-    if item.type ~= "textbox" then
+    if not isNonInteractive(item.type) and item.type ~= "textbox" then
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, math.min(h, H_DROP))
         btn.BackgroundTransparency = 1
@@ -1811,7 +1841,7 @@ function renderView()
 
     State.sel = math.clamp(State.sel, 1, #items)
 
-    while items[State.sel] and items[State.sel].type == "section_header" do
+    while items[State.sel] and isNonInteractive(items[State.sel].type) do
         State.sel = State.sel + 1
         if State.sel > #items then State.sel = 1 end
     end
@@ -2278,7 +2308,7 @@ function toggleMenu(show)
         if State.sel > #State.flatItems then State.sel = math.max(1, #State.flatItems) end
         if State.sel < 1 then State.sel = 1 end
         -- Skip section headers
-        while State.flatItems[State.sel] and State.flatItems[State.sel].type == "section_header" do
+        while State.flatItems[State.sel] and isNonInteractive(State.flatItems[State.sel].type) do
             State.sel = State.sel + 1
             if State.sel > #State.flatItems then State.sel = 1; break end
         end
@@ -2528,7 +2558,7 @@ function bindKeys()
                 playSound("nav")
                 State.sel = State.sel - 1
                 if State.sel < 1 then State.sel = count end
-                while items[State.sel] and items[State.sel].type == "section_header" do
+                while items[State.sel] and isNonInteractive(items[State.sel].type) do
                     State.sel = State.sel - 1
                     if State.sel < 1 then State.sel = count end
                 end
@@ -2537,7 +2567,7 @@ function bindKeys()
                 playSound("nav")
                 State.sel = State.sel + 1
                 if State.sel > count then State.sel = 1 end
-                while items[State.sel] and items[State.sel].type == "section_header" do
+                while items[State.sel] and isNonInteractive(items[State.sel].type) do
                     State.sel = State.sel + 1
                     if State.sel > count then State.sel = 1 end
                 end
@@ -2678,7 +2708,7 @@ if isTouch then
                 local count = #items
                 State.sel = State.sel - 1
                 if State.sel < 1 then State.sel = count end
-                while items[State.sel] and items[State.sel].type == "section_header" do
+                while items[State.sel] and isNonInteractive(items[State.sel].type) do
                     State.sel = State.sel - 1
                     if State.sel < 1 then State.sel = count end
                 end
@@ -2689,7 +2719,7 @@ if isTouch then
                 local count = #items
                 State.sel = State.sel + 1
                 if State.sel > count then State.sel = 1 end
-                while items[State.sel] and items[State.sel].type == "section_header" do
+                while items[State.sel] and isNonInteractive(items[State.sel].type) do
                     State.sel = State.sel + 1
                     if State.sel > count then State.sel = 1 end
                 end
@@ -2726,7 +2756,7 @@ if isTouch then
                     local items = State.flatItems
                     State.sel = State.sel + 1
                     if State.sel > #items then State.sel = 1 end
-                    while items[State.sel] and items[State.sel].type == "section_header" do
+                    while items[State.sel] and isNonInteractive(items[State.sel].type) do
                         State.sel = State.sel + 1
                         if State.sel > #items then State.sel = 1 end
                     end
@@ -2737,7 +2767,7 @@ if isTouch then
                     local items = State.flatItems
                     State.sel = State.sel - 1
                     if State.sel < 1 then State.sel = #items end
-                    while items[State.sel] and items[State.sel].type == "section_header" do
+                    while items[State.sel] and isNonInteractive(items[State.sel].type) do
                         State.sel = State.sel - 1
                         if State.sel < 1 then State.sel = #items end
                     end
@@ -2850,7 +2880,7 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
             if cx >= fp.X and cx <= fp.X + fs.X 
             and cy >= fp.Y and cy <= fp.Y + fs.Y then
                 local item = State.flatItems[i]
-                if item and item.type ~= "section_header" and item.type ~= "textbox" and item.type ~= "slider" then
+                if item and not isNonInteractive(item.type) and item.type ~= "textbox" and item.type ~= "slider" then
                     State.sel = i
                     createRipple(frame, cx - fp.X, cy - fp.Y)
                     doSelect()
@@ -3491,6 +3521,7 @@ function Library:CreateWindow(title, version)
                 return {
                     Set = function(_, val)
                         el.value = val
+                        if callback then pcall(callback, val) end
                         if State.visible then renderView() end
                     end,
                     Get = function(_) return el.value end,
@@ -3619,6 +3650,26 @@ function Library:CreateWindow(title, version)
                 }
             end
 
+            -- Built-in label element (non-interactive text)
+            function Section:CreateLabel(text)
+                local el = {
+                    type = "label",
+                    label = text or "",
+                }
+                table.insert(sec.elements, el)
+                return el
+            end
+
+            -- Built-in divider element (visual separator)
+            function Section:CreateDivider()
+                local el = {
+                    type = "divider",
+                    label = "---",
+                }
+                table.insert(sec.elements, el)
+                return el
+            end
+
             return Section
         end
 
@@ -3650,6 +3701,206 @@ function Library:CreateWindow(title, version)
         unbindKeys()
         restoreCursor()
         gui:Destroy()
+    end
+
+    -- ═══════════════════════════════════════════════════════════
+    --  NATIVE CONFIG SYSTEM (no addon needed)
+    --  Uses writefile/readfile to persist settings across sessions
+    -- ═══════════════════════════════════════════════════════════
+    local CONFIG_FOLDER = "SpookyHub_Configs"
+    local HttpService = game:GetService("HttpService")
+    
+    -- Check if file system is available
+    local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
+    
+    function Window:SaveConfig(profileName)
+        profileName = profileName or "Default"
+        local data = {}
+        
+        -- Save all element values
+        for _, pageId in ipairs(State.pageOrder) do
+            local pg = State.pages[pageId]
+            if pg then
+                for _, sec in ipairs(pg.sections) do
+                    for _, el in ipairs(sec.elements) do
+                        local key = pg.name .. "|" .. sec.name .. "|" .. el.label
+                        if el.type == "toggle" then
+                            data[key] = { t = "toggle", v = el.value }
+                        elseif el.type == "slider" then
+                            data[key] = { t = "slider", v = el.value }
+                        elseif el.type == "dropdown" then
+                            data[key] = { t = "dropdown", v = el.value }
+                        elseif el.type == "textbox" then
+                            data[key] = { t = "textbox", v = el.value }
+                        elseif el.type == "keybind" then
+                            data[key] = { t = "keybind", v = el.value and el.value.Name or nil }
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Save UI settings (theme, sounds, particles, etc.)
+        data["__ui__"] = {
+            colorIdx = State.colorIdx,
+            sounds = State.sounds,
+            particles = State.particles,
+            scanlines = State.scanlines,
+            glitchTitle = State.glitchTitle,
+            opacity = State.opacity,
+        }
+        
+        local ok, err = pcall(function()
+            local json = HttpService:JSONEncode(data)
+            if _hasFS then
+                if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
+                writefile(CONFIG_FOLDER .. "/" .. profileName .. ".json", json)
+            else
+                -- Fallback: store in _G so it persists within the same session
+                _G.__SpookyConfig = _G.__SpookyConfig or {}
+                _G.__SpookyConfig[profileName] = json
+            end
+        end)
+        
+        if not ok then
+            warn("[SpookyConfig] Save error:", err)
+        end
+        return ok
+    end
+    
+    function Window:LoadConfig(profileName)
+        profileName = profileName or "Default"
+        
+        local json
+        local ok = pcall(function()
+            if _hasFS then
+                local path = CONFIG_FOLDER .. "/" .. profileName .. ".json"
+                if isfile(path) then
+                    json = readfile(path)
+                end
+            else
+                -- Fallback: read from _G
+                if _G.__SpookyConfig and _G.__SpookyConfig[profileName] then
+                    json = _G.__SpookyConfig[profileName]
+                end
+            end
+        end)
+        
+        if not ok or not json then return false end
+        
+        local data
+        ok = pcall(function()
+            data = HttpService:JSONDecode(json)
+        end)
+        if not ok or type(data) ~= "table" then return false end
+        
+        -- Restore UI settings
+        local ui = data["__ui__"]
+        if ui then
+            if ui.colorIdx then State.colorIdx = ui.colorIdx end
+            if ui.sounds ~= nil then State.sounds = ui.sounds end
+            if ui.particles ~= nil then State.particles = ui.particles end
+            if ui.scanlines ~= nil then State.scanlines = ui.scanlines end
+            if ui.glitchTitle ~= nil then State.glitchTitle = ui.glitchTitle end
+            if ui.opacity then State.opacity = ui.opacity end
+        end
+        
+        -- Restore element values
+        for _, pageId in ipairs(State.pageOrder) do
+            local pg = State.pages[pageId]
+            if pg then
+                for _, sec in ipairs(pg.sections) do
+                    for _, el in ipairs(sec.elements) do
+                        local key = pg.name .. "|" .. sec.name .. "|" .. el.label
+                        local saved = data[key]
+                        if saved then
+                            if el.type == "toggle" and saved.t == "toggle" then
+                                el.value = saved.v
+                                if el.callback then pcall(el.callback, el.value) end
+                            elseif el.type == "slider" and saved.t == "slider" then
+                                el.value = math.clamp(saved.v, el.min, el.max)
+                                if el.callback then pcall(el.callback, el.value) end
+                            elseif el.type == "dropdown" and saved.t == "dropdown" then
+                                -- Verify the value still exists in the list
+                                local valid = false
+                                for _, v in ipairs(el.list or {}) do
+                                    if v == saved.v then valid = true; break end
+                                end
+                                if valid then
+                                    el.value = saved.v
+                                    if el.callback then pcall(el.callback, el.value) end
+                                end
+                            elseif el.type == "textbox" and saved.t == "textbox" then
+                                el.value = saved.v or ""
+                            elseif el.type == "keybind" and saved.t == "keybind" then
+                                if saved.v and typeof(Enum.KeyCode[saved.v]) == "EnumItem" then
+                                    el.value = Enum.KeyCode[saved.v]
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if State.visible then renderView() end
+        return true
+    end
+    
+    function Window:GetProfiles()
+        local profiles = {}
+        pcall(function()
+            if _hasFS and isfolder(CONFIG_FOLDER) then
+                local files = listfiles(CONFIG_FOLDER)
+                for _, path in ipairs(files) do
+                    local name = path:match("([^/\\]+)%.json$")
+                    if name then
+                        table.insert(profiles, name)
+                    end
+                end
+            end
+            -- Check _G fallback too
+            if _G.__SpookyConfig then
+                for name in pairs(_G.__SpookyConfig) do
+                    local found = false
+                    for _, p in ipairs(profiles) do if p == name then found = true; break end end
+                    if not found then table.insert(profiles, name) end
+                end
+            end
+        end)
+        return profiles
+    end
+    
+    function Window:ExportConfig(profileName)
+        profileName = profileName or "Default"
+        local json
+        pcall(function()
+            if _hasFS then
+                local path = CONFIG_FOLDER .. "/" .. profileName .. ".json"
+                if isfile(path) then json = readfile(path) end
+            elseif _G.__SpookyConfig then
+                json = _G.__SpookyConfig[profileName]
+            end
+        end)
+        if json and setclipboard then
+            setclipboard(json)
+            return true
+        end
+        return false
+    end
+    
+    function Window:DeleteConfig(profileName)
+        profileName = profileName or "Default"
+        pcall(function()
+            if _hasFS then
+                local path = CONFIG_FOLDER .. "/" .. profileName .. ".json"
+                if isfile(path) then delfile(path) end
+            end
+            if _G.__SpookyConfig then
+                _G.__SpookyConfig[profileName] = nil
+            end
+        end)
+        return true
     end
 
     return Window
