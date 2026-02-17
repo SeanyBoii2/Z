@@ -1269,17 +1269,10 @@ function switchTab(idx)
     -- Rebuild tab bar
     pcall(updateTabBar)
     
-    -- Force visual refresh
-    clearItems()
-    State._animateItems = true
-    pcall(renderView)
-    State._animateItems = false
-    
-    -- Flicker frame to force layout update
-    mainFrame.Visible = false
-    task.defer(function()
-        mainFrame.Visible = true
-    end)
+    -- Force reopen
+    State._toggling = false
+    State.visible = false
+    toggleMenu(true)
 end
 
 -- Heartbeat-driven tab switch (avoids destroying buttons mid-click)
