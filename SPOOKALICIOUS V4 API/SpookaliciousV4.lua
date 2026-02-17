@@ -441,12 +441,16 @@ end
 --  ENHANCED SOUND SYSTEM (unique IDs per action)
 ------------------------------------------------------------------------
 local sounds = {}
+local soundParent = SoundService  -- SoundService is most reliable across executors
+
 local function createSnd(vol, pitch, id)
     local s = Instance.new("Sound")
     s.Volume = vol or 0.2
     s.PlaybackSpeed = pitch or 1
     s.SoundId = id or "rbxassetid://6042053626"
-    s.Parent = SoundService
+    s.RollOffMode = Enum.RollOffMode.InverseTapered
+    s.RollOffMaxDistance = 10000
+    s.Parent = soundParent
     return s
 end
 
@@ -501,6 +505,26 @@ sounds.impact = createSnd(0.80, 0.35, "rbxassetid://6895079853")
 -- Charge: rising energy for loading
 sounds.charge = createSnd(0.60, 0.6, "rbxassetid://9113869830")
 
+-- Preload sound assets so they're ready immediately
+task.spawn(function()
+    pcall(function()
+        local CP = game:GetService("ContentProvider")
+        CP:PreloadAsync({
+            Instance.new("Sound", nil),  -- warm up
+        })
+        -- Preload all unique sound IDs
+        local preloadList = {}
+        for _, snd in pairs(sounds) do
+            if type(snd) == "table" then
+                for _, s in ipairs(snd) do table.insert(preloadList, s) end
+            else
+                table.insert(preloadList, snd)
+            end
+        end
+        CP:PreloadAsync(preloadList)
+    end)
+end)
+
 local basePitches = {}
 for name, snd in pairs(sounds) do
     if type(snd) == "table" then
@@ -522,11 +546,24 @@ local function playSound(name)
         s = s[idx]
         bp = bp[idx]
     end
-    if s and bp then
-        -- Micro pitch variation for organic feel (stays near original)
-        s.PlaybackSpeed = bp + (math.random() - 0.5) * 0.08
-        s:Stop(); s:Play()
-    end
+    if not s or not bp then return end
+    -- Clone for overlapping playback (original stays as template)
+    task.spawn(function()
+        pcall(function()
+            local clone = s:Clone()
+            clone.PlaybackSpeed = bp + (math.random() - 0.5) * 0.08
+            clone.Parent = s.Parent
+            clone:Play()
+            -- Cleanup after done
+            clone.Ended:Once(function()
+                clone:Destroy()
+            end)
+            -- Safety cleanup in case Ended never fires
+            task.delay(5, function()
+                pcall(function() clone:Destroy() end)
+            end)
+        end)
+    end)
 end
 
 ------------------------------------------------------------------------
@@ -1183,7 +1220,8 @@ local function updateTabBar()
         
         btn.Activated:Connect(function()
             if i ~= State.activeTab then
-                switchTab(i)
+                -- Defer so button click event finishes before buttons get rebuilt
+                task.defer(function() switchTab(i) end)
             end
         end)
         
@@ -1211,9 +1249,15 @@ function switchTab(idx)
     State.sel = 1
     State.stack = {}
     
-    playSound("page")
-    if State.visible then renderView() end
+    -- Rebuild tab bar FIRST so highlight updates
     updateTabBar()
+    
+    playSound("page")
+    
+    -- Then render the content
+    State._animateItems = true
+    renderView()
+    State._animateItems = false
 end
 
 ------------------------------------------------------------------------
@@ -1671,8 +1715,8 @@ local function createItemUI(index, item, yPos)
             ZIndex = 27,
         })
         
-        -- Arrow slide animation when selected
-        if sel then
+        -- Arrow slide animation when selected (skip during rainbow refresh)
+        if sel and not State._rainbowRefresh then
             arrow.Position = UDim2.new(1, -38, 0, 0)
             quickTween(arrow, 0.25, {
                 Position = UDim2.new(1, -28, 0, 0),
@@ -3703,6 +3747,18 @@ function Library:CreateWindow(title, version)
     -- Update tab bar (shows when 2+ tabs exist)
     updateTabBar()
 
+    -- If this is a 2nd+ tab, auto-switch to it and refresh the view
+    if #State.tabs > 1 then
+        State.currentView = "home"
+        State.sel = 1
+        State.stack = {}
+        if State.visible then
+            State._animateItems = true
+            renderView()
+            State._animateItems = false
+        end
+    end
+
     local Window = {}
     Window.__index = Window
 
@@ -3931,7 +3987,17 @@ function Library:CreateWindow(title, version)
         State.visible = false
         unbindKeys()
         restoreCursor()
-        _G.__SpookaliciousV4 = nil  -- clear singleton so fresh load rebuilds
+        _G.__SpookaliciousV4 = nil
+        -- Cleanup sounds
+        pcall(function()
+            for _, snd in pairs(sounds) do
+                if type(snd) == "table" then
+                    for _, s in ipairs(snd) do pcall(function() s:Destroy() end) end
+                else
+                    pcall(function() snd:Destroy() end)
+                end
+            end
+        end)
         gui:Destroy()
     end
 
