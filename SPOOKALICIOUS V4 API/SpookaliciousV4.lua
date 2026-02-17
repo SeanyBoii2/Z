@@ -1271,7 +1271,7 @@ function switchTab(idx)
     
     -- Quick close then reopen to refresh
     toggleMenu(false)
-    task.delay(0.25, function()
+    task.delay(0.35, function()
         toggleMenu(true)
     end)
 end
