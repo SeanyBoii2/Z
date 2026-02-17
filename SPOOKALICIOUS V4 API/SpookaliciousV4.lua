@@ -1264,22 +1264,15 @@ function switchTab(idx)
         versionLabel.Text = State.version
     end)
     
-    playSound("page")
+  playSound("page")
     
-    -- Rebuild tab bar (safe - no button is mid-click anymore)
+    -- Rebuild tab bar
     pcall(updateTabBar)
     
-   -- Render the content
-    clearItems()  -- force clear old tab's items first
-    State._animateItems = true
-    pcall(renderView)
-    State._animateItems = false
-    
-    task.defer(function()
-        if State.activeTab == idx then
-            clearItems()
-            pcall(renderView)
-        end
+    -- Quick close then reopen to refresh
+    toggleMenu(false)
+    task.delay(0.25, function()
+        toggleMenu(true)
     end)
 end
 
