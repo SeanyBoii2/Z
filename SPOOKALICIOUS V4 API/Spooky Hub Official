@@ -81,7 +81,7 @@ end
 --================================--
 local Window
 pcall(function()
-    Window = Library:CreateWindow("SPOOKALICIOUS HUB", "V4")
+    Window = Library:CreateWindow("SPOOKY HUB", "SPOOKALICIOUS V4")
 end)
 
 if not Window then
