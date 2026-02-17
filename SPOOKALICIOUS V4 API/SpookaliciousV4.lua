@@ -2101,14 +2101,24 @@ local function buildFlatItems()
     State.flatItems = {}
 
     if State.currentView == "home" then
-        for _, pageId in ipairs(State.pageOrder) do
-            local pg = State.pages[pageId]
+ for _, entry in ipairs(State.pageOrder) do
+    if type(entry) == "table" then
+        if entry.__type == "divider" then
+            table.insert(State.flatItems, { type = "divider", label = "---" })
+        elseif entry.__type == "section" then
+            table.insert(State.flatItems, { type = "section_header", label = entry.label })
+        end
+    else
+        local pg = State.pages[entry]
+        if pg then
             table.insert(State.flatItems, {
                 type = "page_link",
                 label = pg.name,
-                pageId = pageId,
+                pageId = entry,
             })
         end
+    end
+end
         table.insert(State.flatItems, {
             type = "page_link",
             label = "Settings",
@@ -3995,7 +4005,19 @@ function Library:CreateWindow(title, version)
 
         return Page
     end
+function Window:CreateHomeDivider()
+    table.insert(_myPageOrder, { __type = "divider" })
+    if State.activeTab == _myTabIdx then
+        State.pageOrder = _myPageOrder
+    end
+end
 
+function Window:CreateHomeSection(label)
+    table.insert(_myPageOrder, { __type = "section", label = label })
+    if State.activeTab == _myTabIdx then
+        State.pageOrder = _myPageOrder
+    end
+end
     function Window:Toggle()
         toggleMenu(not State.visible)
     end
