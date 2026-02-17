@@ -8,6 +8,9 @@
     
     local Library = loadstring(...)()
     local Window = Library:CreateWindow("My Menu", "v1.0")
+
+    -- If another script loads the API again, it gets the SAME Library.
+    -- Calling CreateWindow again adds a new TAB to the existing menu.
     
     local Page = Window:CreatePage("Combat")
     local Section = Page:CreateSection("Aimbot")
@@ -48,6 +51,14 @@
       V         Toggle Mouse Mode (free movement + click to select)
       Drag titlebar to move. Drag corner to resize.
 --]]
+
+-- ═══ SINGLETON: If API is already loaded, return the existing Library ═══
+-- This is what makes tabs work. When a second script does:
+--   local Library = loadstring(game:HttpGet(URL))()
+-- It gets the SAME Library back, so CreateWindow adds a tab instead of rebuilding.
+if _G.__SpookaliciousV4 then
+    return _G.__SpookaliciousV4
+end
 
 -- Services
 local Players       = game:GetService("Players")
@@ -1012,18 +1023,18 @@ local titleLabel = makeLabel(titleRegion, {
 })
 local titleTextStroke = addStroke(titleLabel, ct().glow, 2.0, 0.2, Enum.ApplyStrokeMode.Contextual)
 
--- Skull icons flanking the title
-local titleSkullL = makeSkullIcon(titleRegion, 26, {
-    Position = UDim2.new(0.5, -105, 0, 4),
-    AnchorPoint = Vector2.new(0.5, 0),
+-- Skull icons in top corners
+local titleSkullL = makeSkullIcon(titleRegion, 18, {
+    Position = UDim2.new(0, 8, 0, 8),
+    AnchorPoint = Vector2.new(0, 0),
     ZIndex = 23,
-    ImageTransparency = 0.1,
+    ImageTransparency = 0.15,
 })
-local titleSkullR = makeSkullIcon(titleRegion, 26, {
-    Position = UDim2.new(0.5, 105, 0, 4),
-    AnchorPoint = Vector2.new(0.5, 0),
+local titleSkullR = makeSkullIcon(titleRegion, 18, {
+    Position = UDim2.new(1, -8, 0, 8),
+    AnchorPoint = Vector2.new(1, 0),
     ZIndex = 23,
-    ImageTransparency = 0.1,
+    ImageTransparency = 0.15,
 })
 
 local glitchRed = makeLabel(titleRegion, {
@@ -1478,7 +1489,7 @@ local function createItemUI(index, item, yPos)
     
     -- Staggered slide-in animation (items cascade in from right)
     -- Only plays ONCE per page transition, not on every renderView
-    if State._animateItems then
+    if State._animateItems and not State._rainbowRefresh then
         local delay = math.min(index * 0.025, 0.3)
         frame.Position = UDim2.new(0.15, 3, 0, yPos)
         local origTransp = sel and 0.87 or 1
@@ -1493,6 +1504,49 @@ local function createItemUI(index, item, yPos)
     end
 
     if sel then
+        -- During rainbow refresh, set colors instantly (no entrance tweens)
+        if State._rainbowRefresh then
+            frame.BackgroundTransparency = 0.87
+            
+            for _, side in ipairs({"left","right"}) do
+                local bar = makeFrame(frame, {
+                    Size = UDim2.new(0, 2, 0.6, 0),
+                    Position = side == "left"
+                        and UDim2.new(0, 2, 0.5, 0)
+                        or UDim2.new(1, -4, 0.5, 0),
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    BackgroundColor3 = c.glow,
+                    BackgroundTransparency = 0.05,
+                    ZIndex = 26,
+                })
+                addCorner(bar, 1)
+            end
+            
+            local dot = makeFrame(frame, {
+                Size = UDim2.new(0, 6, 0, 6),
+                Position = UDim2.new(0, -4, 0.5, -3),
+                BackgroundColor3 = c.glow,
+                BackgroundTransparency = 0.1,
+                ZIndex = 27,
+            })
+            addCorner(dot, 3)
+            addStroke(dot, c.glow, 2, 0.6)
+            
+            local shimmer = makeFrame(frame, {
+                Size = UDim2.new(1, -8, 0, 1),
+                Position = UDim2.new(0, 4, 0, 1),
+                BackgroundColor3 = c.accent,
+                BackgroundTransparency = 0.75,
+                ZIndex = 26,
+            })
+            addCorner(shimmer, 1)
+            addGradient(shimmer, NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.3, 0),
+                NumberSequenceKeypoint.new(0.7, 0),
+                NumberSequenceKeypoint.new(1, 1),
+            }))
+        else
         frame.BackgroundTransparency = 1
         quickTween(frame, 0.25, { BackgroundTransparency = 0.87 })
 
@@ -1550,6 +1604,7 @@ local function createItemUI(index, item, yPos)
             NumberSequenceKeypoint.new(0.7, 0),
             NumberSequenceKeypoint.new(1, 1),
         }))
+        end -- end rainbow/normal branch
     end
 
     -- SECTION HEADER
@@ -3321,9 +3376,11 @@ end)
 
 task.spawn(function()
     while true do
-        task.wait(0.35)
+        task.wait(0.5)
         if State.visible and THEMES[State.colorIdx].name == "RAINBOW" then
+            State._rainbowRefresh = true
             renderView()
+            State._rainbowRefresh = false
         end
     end
 end)
@@ -3874,6 +3931,7 @@ function Library:CreateWindow(title, version)
         State.visible = false
         unbindKeys()
         restoreCursor()
+        _G.__SpookaliciousV4 = nil  -- clear singleton so fresh load rebuilds
         gui:Destroy()
     end
 
@@ -4622,5 +4680,8 @@ if isMobile then
 else
     print("Press LEFT ALT to open. V for mouse mode.")
 end
+
+-- Store globally so future loadstrings get the same Library (tabs work)
+_G.__SpookaliciousV4 = Library
 
 return Library
