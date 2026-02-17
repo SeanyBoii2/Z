@@ -1273,12 +1273,10 @@ function switchTab(idx)
         State.currentView = "home"
         State.sel = 1
         State.stack = {}
-        State._animateItems = true
         renderView()
-        State._animateItems = false
-        itemsFrame.CanvasPosition = Vector2.new(0, 0)
+        itemsFrame.Visible = false
         task.wait()
-        renderView() -- second pass after layout settles
+        itemsFrame.Visible = true
     end)
 end
 
