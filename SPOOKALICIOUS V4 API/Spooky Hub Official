@@ -165,6 +165,10 @@ end
 --╚══════════════════════════════════════════════════════════════════════════╝
 
 local UNIVERSAL_SCRIPTS = {
+ {
+        Name = "Hitbox Expander + Triggerbot",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot",
+    },
     {
         Name = "Motorcycle Tricks",
         URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Motorcycle%20Tricks%20Universal.txt",
@@ -186,8 +190,8 @@ local UNIVERSAL_SCRIPTS = {
         URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Animation%20Logger.txt",
     },
     {
-        Name = "Hitbox Expander + Triggerbot",
-        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot",
+        Name = "Path Finder",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Path%20Finder",
     },
 }
 
