@@ -60,6 +60,10 @@ local GuiService    = game:GetService("GuiService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local Lighting  = game:GetService("Lighting")
+
+-- Skull icon asset (replaces emoji throughout)
+local SKULL_IMAGE = "rbxassetid://93796493145546"
 
 ------------------------------------------------------------------------
 --  PLATFORM DETECTION
@@ -216,9 +220,13 @@ local State = {
     sel = 1,
     stack = {},
 
-    -- All registered pages
+    -- All registered pages (points to active tab's data)
     pages = {},
     pageOrder = {},
+
+    -- Tab system: each loaded script gets its own tab
+    tabs = {},        -- { {name, version, pages={}, pageOrder={}} }
+    activeTab = 0,    -- index into tabs
 
     -- Current flat item list for keyboard nav
     flatItems = {},
@@ -227,7 +235,7 @@ local State = {
     title = "SPOOKALICIOUS",
     version = "V4",
 
-    -- Mouse mode: V key toggles this. When true, keys pass to game, mouse clicks on GUI only
+    -- Mouse mode: V key toggles this
     mouseMode = false,
 }
 
@@ -407,6 +415,17 @@ local function makeFrame(parent, props)
     return f
 end
 
+local function makeSkullIcon(parent, size, props)
+    local img = Instance.new("ImageLabel")
+    img.Image = SKULL_IMAGE
+    img.BackgroundTransparency = 1
+    img.ScaleType = Enum.ScaleType.Fit
+    img.Size = UDim2.new(0, size, 0, size)
+    if props then for k, v in pairs(props) do img[k] = v end end
+    img.Parent = parent
+    return img
+end
+
 ------------------------------------------------------------------------
 --  ENHANCED SOUND SYSTEM (unique IDs per action)
 ------------------------------------------------------------------------
@@ -420,50 +439,56 @@ local function createSnd(vol, pitch, id)
     return s
 end
 
--- Navigation: soft tick/click sounds
+-- Navigation: crisp UI tick
 sounds.nav = {
-    createSnd(0.10, 1.6, "rbxassetid://6042053626"),
-    createSnd(0.10, 1.5, "rbxassetid://6042053626"),
-    createSnd(0.10, 1.7, "rbxassetid://6042053626"),
+    createSnd(0.45, 1.6, "rbxassetid://6042053626"),
+    createSnd(0.45, 1.5, "rbxassetid://9113869830"),
+    createSnd(0.45, 1.7, "rbxassetid://6042053626"),
 }
--- Select: satisfying confirm pop
+-- Select: punchy confirm
 sounds.select = {
-    createSnd(0.18, 1.1, "rbxassetid://6895079853"),
-    createSnd(0.18, 1.0, "rbxassetid://6895079853"),
+    createSnd(0.60, 1.1, "rbxassetid://6895079853"),
+    createSnd(0.60, 1.0, "rbxassetid://9113869830"),
 }
--- Back: low thud
-sounds.back = createSnd(0.16, 0.6, "rbxassetid://6042053626")
--- Slider: subtle notch tick
-sounds.slider = createSnd(0.06, 2.2, "rbxassetid://6042053626")
--- Open: dramatic whoosh
-sounds.open = createSnd(0.22, 0.45, "rbxassetid://6895079853")
--- Close: reverse whoosh
-sounds.close = createSnd(0.15, 0.7, "rbxassetid://6042053626")
+-- Back: deep thump
+sounds.back = createSnd(0.55, 0.5, "rbxassetid://6042053626")
+-- Slider: notch click
+sounds.slider = createSnd(0.35, 2.2, "rbxassetid://6042053626")
+-- Open: heavy whoosh
+sounds.open = createSnd(0.75, 0.4, "rbxassetid://6895079853")
+-- Close: reverse slam
+sounds.close = createSnd(0.65, 0.65, "rbxassetid://6042053626")
 -- Toggle: snappy switch
 sounds.toggle = {
-    createSnd(0.15, 1.3, "rbxassetid://6895079853"),
-    createSnd(0.15, 1.4, "rbxassetid://6895079853"),
+    createSnd(0.55, 1.3, "rbxassetid://6895079853"),
+    createSnd(0.55, 1.4, "rbxassetid://9113869830"),
 }
--- Hover: barely audible whisper
-sounds.hover = createSnd(0.03, 2.5, "rbxassetid://6042053626")
+-- Hover: soft whisper tick
+sounds.hover = createSnd(0.15, 2.5, "rbxassetid://6042053626")
 -- Success: bright chime
-sounds.success = createSnd(0.12, 1.6, "rbxassetid://6895079853")
--- Page transition: whoosh sweep
-sounds.page = createSnd(0.14, 0.9, "rbxassetid://6895079853")
--- Theme change: magical shimmer
-sounds.theme = createSnd(0.16, 1.8, "rbxassetid://6895079853")
+sounds.success = createSnd(0.50, 1.6, "rbxassetid://6895079853")
+-- Page transition: sweep
+sounds.page = createSnd(0.55, 0.9, "rbxassetid://6895079853")
+-- Theme change: shimmer
+sounds.theme = createSnd(0.55, 1.8, "rbxassetid://9113869830")
 -- Error: low buzz
-sounds.error = createSnd(0.10, 0.4, "rbxassetid://6042053626")
--- Intro: deep boot-up
-sounds.intro = createSnd(0.25, 0.3, "rbxassetid://6895079853")
+sounds.error = createSnd(0.45, 0.4, "rbxassetid://6042053626")
+-- Intro: deep cinematic boom
+sounds.intro = createSnd(0.85, 0.25, "rbxassetid://6895079853")
 -- Intro chime: bright arrival
-sounds.introChime = createSnd(0.20, 1.2, "rbxassetid://6895079853")
+sounds.introChime = createSnd(0.75, 1.2, "rbxassetid://9113869830")
 -- Whoosh: fast sweep for transitions
-sounds.whoosh = createSnd(0.12, 0.55, "rbxassetid://6042053626")
--- Lock: satisfying click for closing/saving state
-sounds.lock = createSnd(0.14, 1.8, "rbxassetid://6042053626")
--- Glitch: digital distortion
-sounds.glitch = createSnd(0.08, 3.2, "rbxassetid://6042053626")
+sounds.whoosh = createSnd(0.55, 0.5, "rbxassetid://6042053626")
+-- Lock: heavy click
+sounds.lock = createSnd(0.50, 1.6, "rbxassetid://6042053626")
+-- Glitch: digital noise
+sounds.glitch = createSnd(0.35, 3.2, "rbxassetid://6042053626")
+-- Boot: deep power-on hum
+sounds.boot = createSnd(0.75, 0.2, "rbxassetid://6895079853")
+-- Impact: heavy slam for intro phase transitions
+sounds.impact = createSnd(0.80, 0.35, "rbxassetid://6895079853")
+-- Charge: rising energy for loading
+sounds.charge = createSnd(0.60, 0.6, "rbxassetid://9113869830")
 
 local basePitches = {}
 for name, snd in pairs(sounds) do
@@ -670,16 +695,22 @@ hintBar.Parent = hintFrame
 addCorner(hintBar, 2)
 
 local hintLabel = makeLabel(hintFrame, {
-    Size = UDim2.new(1, -26, 1, 0),
-    Position = UDim2.new(0, 18, 0, 0),
+    Size = UDim2.new(1, -46, 1, 0),
+    Position = UDim2.new(0, 38, 0, 0),
     TextSize = 14,
     TextColor3 = ct().accentDim,
     Text = isMobile 
-        and (utf8.char(0x1F480) .. ' Tap the <font color="#d8a0ff">skull button</font> to summon <font color="#d8a0ff">SPOOKALICIOUS</font> ' .. utf8.char(0x1F480))
-        or (utf8.char(0x1F480) .. ' Press <font color="#d8a0ff">LEFT ALT</font> to summon <font color="#d8a0ff">SPOOKALICIOUS</font> ' .. utf8.char(0x1F480)),
+        and 'Tap the <font color="#d8a0ff">skull button</font> to summon <font color="#d8a0ff">SPOOKALICIOUS</font>'
+        or 'Press <font color="#d8a0ff">LEFT ALT</font> to summon <font color="#d8a0ff">SPOOKALICIOUS</font>',
+    TextXAlignment = Enum.TextXAlignment.Left,
     ZIndex = 72,
 })
 addStroke(hintLabel, Color3.fromRGB(50, 18, 90), 1.2, 0.25, Enum.ApplyStrokeMode.Contextual)
+local hintSkull = makeSkullIcon(hintFrame, 20, {
+    Position = UDim2.new(0, 12, 0.5, 0),
+    AnchorPoint = Vector2.new(0, 0.5),
+    ZIndex = 73,
+})
 
 task.spawn(function()
     while true do
@@ -723,12 +754,10 @@ if isTouch then
     -- Outer glow ring
     mobileBtnGlow = addStroke(mobileToggleBtn, ct().glow, 4, 0.8)
     
-    -- Skull icon
-    mobileBtnLabel = makeLabel(mobileToggleBtn, {
-        Size = UDim2.new(1, 0, 1, 0),
-        TextSize = 24,
-        TextColor3 = ct().accent,
-        Text = utf8.char(0x1F480),
+    -- Skull icon image
+    mobileBtnLabel = makeSkullIcon(mobileToggleBtn, 28, {
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
         ZIndex = 201,
     })
     
@@ -978,20 +1007,34 @@ local titleLabel = makeLabel(titleRegion, {
     Position = UDim2.new(0, 0, 0, 0),
     TextSize = 26,
     TextColor3 = ct().accent,
-    Text = utf8.char(0x1F480) .. " SPOOKALICIOUS " .. utf8.char(0x1F480),
+    Text = "SPOOKALICIOUS",
     ZIndex = 22,
 })
 local titleTextStroke = addStroke(titleLabel, ct().glow, 2.0, 0.2, Enum.ApplyStrokeMode.Contextual)
 
+-- Skull icons flanking the title
+local titleSkullL = makeSkullIcon(titleRegion, 26, {
+    Position = UDim2.new(0.5, -105, 0, 4),
+    AnchorPoint = Vector2.new(0.5, 0),
+    ZIndex = 23,
+    ImageTransparency = 0.1,
+})
+local titleSkullR = makeSkullIcon(titleRegion, 26, {
+    Position = UDim2.new(0.5, 105, 0, 4),
+    AnchorPoint = Vector2.new(0.5, 0),
+    ZIndex = 23,
+    ImageTransparency = 0.1,
+})
+
 local glitchRed = makeLabel(titleRegion, {
     Name = "GR", Size = UDim2.new(1,0,0,35), Position = UDim2.new(0,0,0,0),
     TextSize = 26, TextColor3 = Color3.fromRGB(255,30,80),
-    Text = utf8.char(0x1F480) .. " SPOOKALICIOUS " .. utf8.char(0x1F480), TextTransparency = 1, ZIndex = 21,
+    Text = "SPOOKALICIOUS", TextTransparency = 1, ZIndex = 21,
 })
 local glitchGreen = makeLabel(titleRegion, {
     Name = "GG", Size = UDim2.new(1,0,0,35), Position = UDim2.new(0,0,0,0),
     TextSize = 26, TextColor3 = Color3.fromRGB(60,255,140),
-    Text = utf8.char(0x1F480) .. " SPOOKALICIOUS " .. utf8.char(0x1F480), TextTransparency = 1, ZIndex = 21,
+    Text = "SPOOKALICIOUS", TextTransparency = 1, ZIndex = 21,
 })
 
 local versionLabel = makeLabel(titleRegion, {
@@ -1017,11 +1060,156 @@ dragBtn.ZIndex = 23
 dragBtn.Parent = titleRegion
 
 ------------------------------------------------------------------------
+--  TAB BAR (shows when multiple scripts are loaded)
+------------------------------------------------------------------------
+local TAB_BAR_H = 26
+local TAB_BAR_GAP = 4
+local tabBarVisible = false
+
+-- Forward declarations for elements created below (needed by updateTabBar)
+local subY = 68
+local itemsY = subY + 40
+local subtitleBanner, topSep, itemsFrame
+
+local tabBarFrame = makeFrame(mainFrame, {
+    Name = "TabBar",
+    Size = UDim2.new(1, -24, 0, TAB_BAR_H),
+    Position = UDim2.new(0, 12, 0, 62),
+    ZIndex = 24,
+    ClipsDescendants = true,
+    Visible = false,
+})
+
+local tabBarScroll = Instance.new("ScrollingFrame")
+tabBarScroll.Name = "TabScroll"
+tabBarScroll.Size = UDim2.new(1, 0, 1, 0)
+tabBarScroll.BackgroundTransparency = 1
+tabBarScroll.BorderSizePixel = 0
+tabBarScroll.ScrollBarThickness = 0
+tabBarScroll.ScrollingDirection = Enum.ScrollingDirection.X
+tabBarScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+tabBarScroll.ZIndex = 25
+tabBarScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabBarScroll.Parent = tabBarFrame
+
+local tabBarLayout = Instance.new("UIListLayout")
+tabBarLayout.FillDirection = Enum.FillDirection.Horizontal
+tabBarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabBarLayout.Padding = UDim.new(0, 4)
+tabBarLayout.Parent = tabBarScroll
+
+local tabBarPadding = Instance.new("UIPadding")
+tabBarPadding.PaddingLeft = UDim.new(0, 2)
+tabBarPadding.PaddingRight = UDim.new(0, 2)
+tabBarPadding.Parent = tabBarScroll
+
+local tabBtnInstances = {} -- track tab button references
+
+local function updateTabBar()
+    -- Clear old tab buttons
+    for _, btn in ipairs(tabBtnInstances) do
+        if btn and btn.Parent then btn:Destroy() end
+    end
+    tabBtnInstances = {}
+
+    local shouldShow = #State.tabs > 1
+    
+    if shouldShow ~= tabBarVisible then
+        tabBarVisible = shouldShow
+        tabBarFrame.Visible = shouldShow
+        
+        -- Reposition subtitle and items when tab bar toggles
+        local offset = shouldShow and (TAB_BAR_H + TAB_BAR_GAP) or 0
+        local newSubY = 68 + offset
+        subY = newSubY  -- update file-scoped variable
+        subtitleBanner.Position = UDim2.new(0, 12, 0, newSubY)
+        topSep.Position = UDim2.new(0, 14, 0, newSubY + 34)
+        itemsY = newSubY + 40  -- update file-scoped variable for renderView height calc
+        itemsFrame.Position = UDim2.new(0, 0, 0, itemsY)
+    end
+
+    if not shouldShow then return end
+
+    local c = ct()
+    for i, tab in ipairs(State.tabs) do
+        local isActive = (i == State.activeTab)
+        
+        local btn = Instance.new("TextButton")
+        btn.Name = "Tab_" .. i
+        btn.Size = UDim2.new(0, 0, 1, 0)
+        btn.AutomaticSize = Enum.AutomaticSize.X
+        btn.BackgroundColor3 = isActive and c.border or c.bgLight
+        btn.BackgroundTransparency = isActive and 0.25 or 0.6
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.ZIndex = 26
+        btn.LayoutOrder = i
+        btn.Parent = tabBarScroll
+        
+        addCorner(btn, 5)
+        
+        local lbl = makeLabel(btn, {
+            Size = UDim2.new(1, 0, 1, 0),
+            TextSize = 11,
+            TextColor3 = isActive and c.accent or c.accentDim,
+            Text = "  " .. tab.name .. "  ",
+            ZIndex = 27,
+            Font = isActive and Enum.Font.GothamBold or Enum.Font.Code,
+            AutomaticSize = Enum.AutomaticSize.X,
+        })
+        
+        if isActive then
+            -- Active indicator line at bottom
+            local indicator = makeFrame(btn, {
+                Size = UDim2.new(0.7, 0, 0, 2),
+                Position = UDim2.new(0.15, 0, 1, -3),
+                BackgroundColor3 = c.accent,
+                BackgroundTransparency = 0.15,
+                ZIndex = 28,
+            })
+            addCorner(indicator, 1)
+        end
+        
+        btn.Activated:Connect(function()
+            if i ~= State.activeTab then
+                switchTab(i)
+            end
+        end)
+        
+        table.insert(tabBtnInstances, btn)
+    end
+end
+
+function switchTab(idx)
+    if idx < 1 or idx > #State.tabs then return end
+    local tab = State.tabs[idx]
+    State.activeTab = idx
+    State.pages = tab.pages
+    State.pageOrder = tab.pageOrder
+    State.title = tab.name
+    State.version = tab.version
+    
+    -- Update title display
+    titleLabel.Text = State.title
+    glitchRed.Text = State.title
+    glitchGreen.Text = State.title
+    versionLabel.Text = State.version
+    
+    -- Reset navigation to home
+    State.currentView = "home"
+    State.sel = 1
+    State.stack = {}
+    
+    playSound("page")
+    if State.visible then renderView() end
+    updateTabBar()
+end
+
+------------------------------------------------------------------------
 --  SUBTITLE BANNER
 ------------------------------------------------------------------------
-local subY = 68
 
-local subtitleBanner = makeFrame(mainFrame, {
+subtitleBanner = makeFrame(mainFrame, {
     Size = UDim2.new(1, -24, 0, 28),
     Position = UDim2.new(0, 12, 0, subY),
     BackgroundColor3 = ct().subtitleBg,
@@ -1035,7 +1223,7 @@ local subtitleLabel = makeLabel(subtitleBanner, {
     Size = UDim2.new(1, 0, 1, 0),
     TextSize = 14,
     TextColor3 = ct().subtitleTxt,
-    Text = utf8.char(0x1F383) .. " MAIN MENU " .. utf8.char(0x1F383),
+    Text = "« MAIN MENU »",
     ZIndex = 21,
     Font = Enum.Font.Code,
     TextStrokeTransparency = 0.5,
@@ -1063,7 +1251,7 @@ local dotGlow = makeFrame(subtitleBanner, {
 })
 addCorner(dotGlow, 6)
 
-local topSep = makeFrame(mainFrame, {
+topSep = makeFrame(mainFrame, {
     Size = UDim2.new(1, -28, 0, 1.5),
     Position = UDim2.new(0, 14, 0, subY + 34),
     BackgroundColor3 = ct().border,
@@ -1081,9 +1269,9 @@ addCorner(topSep, 1)
 ------------------------------------------------------------------------
 --  ITEMS SCROLLING FRAME
 ------------------------------------------------------------------------
-local itemsY = subY + 40
+itemsY = subY + 40
 
-local itemsFrame = Instance.new("ScrollingFrame")
+itemsFrame = Instance.new("ScrollingFrame")
 itemsFrame.Name = "Items"
 itemsFrame.Size = UDim2.new(1, -8, 0, 300)
 itemsFrame.Position = UDim2.new(0, 4, 0, itemsY)
@@ -1850,16 +2038,20 @@ function renderView()
 
     -- Subtitle
     if State.currentView == "home" then
-        subtitleLabel.Text = utf8.char(0x1F383) .. " MAIN MENU " .. utf8.char(0x1F383)
+        if #State.tabs > 1 then
+            subtitleLabel.Text = "« " .. string.upper(State.title) .. " »"
+        else
+            subtitleLabel.Text = "« MAIN MENU »"
+        end
     elseif State.currentView == "__settings__" then
-        subtitleLabel.Text = utf8.char(0x1F383) .. " SETTINGS " .. utf8.char(0x1F383)
+        subtitleLabel.Text = "« SETTINGS »"
     else
         local pg = State.pages[State.currentView]
-        subtitleLabel.Text = pg and (utf8.char(0x1F383) .. " " .. string.upper(pg.name) .. " " .. utf8.char(0x1F383)) or "---"
+        subtitleLabel.Text = pg and ("« " .. string.upper(pg.name) .. " »") or "---"
     end
 
-    -- FIX 1: Footer text (mobile vs desktop)
-    local bk = #State.stack > 0 and "BACK" or "CLOSE"
+    -- Footer text
+    local bk = #State.stack > 0 and "BACK" or ""
     if isMobile then
         footerLabel.Text = '<font color="#50ff90">TAP</font> items  <font color="#ffaa40">▲▼</font> Nav  <font color="#d8a0ff">✓</font> Select  <font color="#ff4070">✕</font> ' .. bk
     else
@@ -2148,9 +2340,8 @@ function doGoBack()
         State._animateItems = true
         renderView()
         State._animateItems = false
-    else
-        toggleMenu(false)
     end
+    -- X at home screen does nothing. Only ALT closes the menu.
 end
 
 function doSliderAdjust(dir)
@@ -3423,32 +3614,60 @@ Library.__index = Library
 _G.SpookyLibrary = Library
 
 function Library:CreateWindow(title, version)
-    local skull = utf8.char(0x1F480)
-    local pumpkin = utf8.char(0x1F383)
+    title = title or "SPOOKALICIOUS"
+    version = version or "V4"
 
-    State.title = title or "SPOOKALICIOUS"
-    State.version = version or "V4"
+    -- Create a new tab for this script
+    local tab = {
+        name = title,
+        version = version,
+        pages = {},
+        pageOrder = {},
+    }
+    table.insert(State.tabs, tab)
+    State.activeTab = #State.tabs
 
-    titleLabel.Text = skull .. " " .. State.title .. " " .. skull
-    glitchRed.Text = skull .. " " .. State.title .. " " .. skull
-    glitchGreen.Text = skull .. " " .. State.title .. " " .. skull
+    -- Point State.pages/pageOrder to this tab's data
+    State.pages = tab.pages
+    State.pageOrder = tab.pageOrder
+
+    State.title = title
+    State.version = version
+
+    titleLabel.Text = State.title
+    glitchRed.Text = State.title
+    glitchGreen.Text = State.title
     versionLabel.Text = State.version
 
     hintLabel.Text = isMobile
-        and string.format('%s Tap the <font color="#d8a0ff">skull button</font> to summon <font color="#d8a0ff">%s</font> %s', skull, State.title, skull)
-        or string.format('%s Press <font color="#d8a0ff">LEFT ALT</font> to summon <font color="#d8a0ff">%s</font> %s', skull, State.title, skull)
+        and string.format('Tap the <font color="#d8a0ff">skull button</font> to summon <font color="#d8a0ff">%s</font>', State.title)
+        or string.format('Press <font color="#d8a0ff">LEFT ALT</font> to summon <font color="#d8a0ff">%s</font>', State.title)
+
+    -- Update tab bar (shows when 2+ tabs exist)
+    updateTabBar()
 
     local Window = {}
     Window.__index = Window
 
+    -- Capture references to THIS tab's data (not State.pages which may change)
+    local _myPages = tab.pages
+    local _myPageOrder = tab.pageOrder
+    local _myTabIdx = #State.tabs
+
     function Window:CreatePage(name)
-        local pageId = "page_" .. tostring(#State.pageOrder + 1) .. "_" .. name:gsub("%s","_")
+        local pageId = "tab" .. _myTabIdx .. "_page_" .. tostring(#_myPageOrder + 1) .. "_" .. name:gsub("%s","_")
         local page = {
             name = name,
             sections = {},
         }
-        State.pages[pageId] = page
-        table.insert(State.pageOrder, pageId)
+        _myPages[pageId] = page
+        table.insert(_myPageOrder, pageId)
+        
+        -- If this tab is active, refresh State references
+        if State.activeTab == _myTabIdx then
+            State.pages = _myPages
+            State.pageOrder = _myPageOrder
+        end
 
         local Page = {}
         Page.__index = Page
@@ -3672,23 +3891,25 @@ function Library:CreateWindow(title, version)
         profileName = profileName or "Default"
         local data = {}
         
-        -- Save all element values
-        for _, pageId in ipairs(State.pageOrder) do
-            local pg = State.pages[pageId]
-            if pg then
-                for _, sec in ipairs(pg.sections) do
-                    for _, el in ipairs(sec.elements) do
-                        local key = pg.name .. "|" .. sec.name .. "|" .. el.label
-                        if el.type == "toggle" then
-                            data[key] = { t = "toggle", v = el.value }
-                        elseif el.type == "slider" then
-                            data[key] = { t = "slider", v = el.value }
-                        elseif el.type == "dropdown" then
-                            data[key] = { t = "dropdown", v = el.value }
-                        elseif el.type == "textbox" then
-                            data[key] = { t = "textbox", v = el.value }
-                        elseif el.type == "keybind" then
-                            data[key] = { t = "keybind", v = el.value and el.value.Name or nil }
+        -- Save all element values across ALL tabs
+        for tabIdx, tab in ipairs(State.tabs) do
+            for _, pageId in ipairs(tab.pageOrder) do
+                local pg = tab.pages[pageId]
+                if pg then
+                    for _, sec in ipairs(pg.sections) do
+                        for _, el in ipairs(sec.elements) do
+                            local key = tab.name .. "|" .. pg.name .. "|" .. sec.name .. "|" .. el.label
+                            if el.type == "toggle" then
+                                data[key] = { t = "toggle", v = el.value }
+                            elseif el.type == "slider" then
+                                data[key] = { t = "slider", v = el.value }
+                            elseif el.type == "dropdown" then
+                                data[key] = { t = "dropdown", v = el.value }
+                            elseif el.type == "textbox" then
+                                data[key] = { t = "textbox", v = el.value }
+                            elseif el.type == "keybind" then
+                                data[key] = { t = "keybind", v = el.value and el.value.Name or nil }
+                            end
                         end
                     end
                 end
@@ -3760,36 +3981,38 @@ function Library:CreateWindow(title, version)
             if ui.opacity then State.opacity = ui.opacity end
         end
         
-        -- Restore element values
-        for _, pageId in ipairs(State.pageOrder) do
-            local pg = State.pages[pageId]
-            if pg then
-                for _, sec in ipairs(pg.sections) do
-                    for _, el in ipairs(sec.elements) do
-                        local key = pg.name .. "|" .. sec.name .. "|" .. el.label
-                        local saved = data[key]
-                        if saved then
-                            if el.type == "toggle" and saved.t == "toggle" then
-                                el.value = saved.v
-                                if el.callback then pcall(el.callback, el.value) end
-                            elseif el.type == "slider" and saved.t == "slider" then
-                                el.value = math.clamp(saved.v, el.min, el.max)
-                                if el.callback then pcall(el.callback, el.value) end
-                            elseif el.type == "dropdown" and saved.t == "dropdown" then
-                                -- Verify the value still exists in the list
-                                local valid = false
-                                for _, v in ipairs(el.list or {}) do
-                                    if v == saved.v then valid = true; break end
-                                end
-                                if valid then
+        -- Restore element values across ALL tabs
+        for _, tab in ipairs(State.tabs) do
+            for _, pageId in ipairs(tab.pageOrder) do
+                local pg = tab.pages[pageId]
+                if pg then
+                    for _, sec in ipairs(pg.sections) do
+                        for _, el in ipairs(sec.elements) do
+                            -- Try new format (tab|page|section|label) then legacy (page|section|label)
+                            local key = tab.name .. "|" .. pg.name .. "|" .. sec.name .. "|" .. el.label
+                            local saved = data[key] or data[pg.name .. "|" .. sec.name .. "|" .. el.label]
+                            if saved then
+                                if el.type == "toggle" and saved.t == "toggle" then
                                     el.value = saved.v
                                     if el.callback then pcall(el.callback, el.value) end
-                                end
-                            elseif el.type == "textbox" and saved.t == "textbox" then
-                                el.value = saved.v or ""
-                            elseif el.type == "keybind" and saved.t == "keybind" then
-                                if saved.v and typeof(Enum.KeyCode[saved.v]) == "EnumItem" then
-                                    el.value = Enum.KeyCode[saved.v]
+                                elseif el.type == "slider" and saved.t == "slider" then
+                                    el.value = math.clamp(saved.v, el.min, el.max)
+                                    if el.callback then pcall(el.callback, el.value) end
+                                elseif el.type == "dropdown" and saved.t == "dropdown" then
+                                    local valid = false
+                                    for _, v in ipairs(el.list or {}) do
+                                        if v == saved.v then valid = true; break end
+                                    end
+                                    if valid then
+                                        el.value = saved.v
+                                        if el.callback then pcall(el.callback, el.value) end
+                                    end
+                                elseif el.type == "textbox" and saved.t == "textbox" then
+                                    el.value = saved.v or ""
+                                elseif el.type == "keybind" and saved.t == "keybind" then
+                                    if saved.v and typeof(Enum.KeyCode[saved.v]) == "EnumItem" then
+                                        el.value = Enum.KeyCode[saved.v]
+                                    end
                                 end
                             end
                         end
@@ -3868,316 +4091,522 @@ mainFrame.Visible = false
 if not isMobile then hintFrame.Visible = false end
 
 -- ═══════════════════════════════════════════════════════════
---  CINEMATIC INTRO
+--  FULL-SCREEN CINEMATIC INTRO (CoreGui level, covers everything)
 -- ═══════════════════════════════════════════════════════════
 task.spawn(function()
     local c = ct()
     
-    local introOverlay = makeFrame(gui, {
+    -- Create separate ScreenGui on CoreGui for true fullscreen overlay
+    local introGui = Instance.new("ScreenGui")
+    introGui.Name = "SpookyIntro"
+    introGui.DisplayOrder = 999
+    introGui.IgnoreGuiInset = true
+    introGui.ResetOnSpawn = false
+    pcall(function() introGui.Parent = game:GetService("CoreGui") end)
+    if not introGui.Parent then introGui.Parent = playerGui end
+    
+    -- Heavy background blur
+    local blur = Instance.new("BlurEffect")
+    blur.Name = "SpookyIntroBlur"
+    blur.Size = 0
+    blur.Parent = Lighting
+    quickTween(blur, 0.4, { Size = 56 })
+    
+    -- Color correction for cinematic feel
+    local cc = Instance.new("ColorCorrectionEffect")
+    cc.Name = "SpookyIntroCC"
+    cc.Brightness = -0.05
+    cc.Contrast = 0.15
+    cc.Saturation = -0.3
+    cc.TintColor = Color3.fromRGB(200, 180, 255)
+    cc.Parent = Lighting
+    
+    local introOverlay = makeFrame(introGui, {
         Size = UDim2.new(1, 0, 1, 0),
-        BackgroundColor3 = Color3.fromRGB(4, 2, 12),
+        BackgroundColor3 = Color3.fromRGB(2, 1, 8),
         BackgroundTransparency = 0,
-        ZIndex = 300,
+        ZIndex = 1,
         ClipsDescendants = true,
     })
     
-    -- Radial vignette (dark edges, lighter center)
-    local vignette = makeFrame(introOverlay, {
-        Size = UDim2.new(1.2, 0, 1.2, 0),
-        Position = UDim2.new(-0.1, 0, -0.1, 0),
+    -- ══ AMBIENT LAYERS ══
+    
+    -- Animated gradient wash (slow color drift)
+    local gradientWash = makeFrame(introOverlay, {
+        Size = UDim2.new(2.5, 0, 2.5, 0),
+        Position = UDim2.new(-0.75, 0, -0.75, 0),
         BackgroundColor3 = c.glow,
+        BackgroundTransparency = 0.92,
+        ZIndex = 2,
+    })
+    addCorner(gradientWash, 999)
+    quickTween(gradientWash, 6, { 
+        Position = UDim2.new(-0.3, 0, -0.3, 0), 
         BackgroundTransparency = 0.96,
-        ZIndex = 301,
+        Rotation = 15,
+    })
+    
+    -- Pulsing radial vignette
+    local vignette = makeFrame(introOverlay, {
+        Size = UDim2.new(1.6, 0, 1.6, 0),
+        Position = UDim2.new(-0.3, 0, -0.3, 0),
+        BackgroundColor3 = c.glow,
+        BackgroundTransparency = 0.93,
+        ZIndex = 3,
     })
     addCorner(vignette, 999)
+    task.spawn(function()
+        while vignette and vignette.Parent do
+            quickTween(vignette, 1.5, { BackgroundTransparency = 0.88 })
+            task.wait(1.5)
+            if not vignette or not vignette.Parent then break end
+            quickTween(vignette, 1.5, { BackgroundTransparency = 0.95 })
+            task.wait(1.5)
+        end
+    end)
     
-    -- Slow-moving ambient fog
-    local introFog1 = makeFrame(introOverlay, {
-        Size = UDim2.new(0.8, 0, 0.8, 0),
-        Position = UDim2.new(0.1, 0, 0.15, 0),
-        BackgroundColor3 = c.glow,
-        BackgroundTransparency = 0.97,
-        ZIndex = 302,
-    })
-    addCorner(introFog1, 200)
-    local introFog2 = makeFrame(introOverlay, {
-        Size = UDim2.new(0.6, 0, 0.6, 0),
-        Position = UDim2.new(0.35, 0, 0.3, 0),
-        BackgroundColor3 = c.accent,
-        BackgroundTransparency = 0.97,
-        ZIndex = 302,
-    })
-    addCorner(introFog2, 200)
+    -- Slow-moving ambient fog blobs (more of them, larger)
+    for i = 1, 7 do
+        local fog = makeFrame(introOverlay, {
+            Size = UDim2.new(0.4 + math.random() * 0.5, 0, 0.4 + math.random() * 0.5, 0),
+            Position = UDim2.new(math.random() * 0.8 - 0.1, 0, math.random() * 0.8 - 0.1, 0),
+            BackgroundColor3 = i % 3 == 0 and c.glow or (i % 2 == 0 and c.accent or Color3.fromRGB(40, 10, 60)),
+            BackgroundTransparency = 0.94,
+            ZIndex = 4,
+        })
+        addCorner(fog, 200)
+        quickTween(fog, 3 + math.random() * 4, {
+            Position = UDim2.new(fog.Position.X.Scale + (math.random() - 0.5) * 0.3, 0, fog.Position.Y.Scale - 0.15, 0),
+            Rotation = math.random(-20, 20),
+        })
+    end
     
-    -- Animate fog drift
-    quickTween(introFog1, 4, {
-        Position = UDim2.new(0.05, 0, 0.1, 0),
+    -- Animated scanline overlay (horizontal lines scrolling down)
+    local scanlineContainer = makeFrame(introOverlay, {
+        Size = UDim2.new(1, 0, 2, 0),
+        Position = UDim2.new(0, 0, -1, 0),
+        BackgroundTransparency = 1,
+        ZIndex = 6,
+        ClipsDescendants = false,
     })
-    quickTween(introFog2, 4, {
-        Position = UDim2.new(0.4, 0, 0.25, 0),
-    })
+    for i = 0, 60 do
+        local scanline = makeFrame(scanlineContainer, {
+            Size = UDim2.new(1, 0, 0, 1),
+            Position = UDim2.new(0, 0, 0, i * 8),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 0.96,
+            ZIndex = 6,
+        })
+    end
+    -- Scroll scanlines down continuously
+    task.spawn(function()
+        local startY = -1
+        while scanlineContainer and scanlineContainer.Parent do
+            quickTween(scanlineContainer, 3, { Position = UDim2.new(0, 0, 0, 0) })
+            task.wait(3)
+            if scanlineContainer and scanlineContainer.Parent then
+                scanlineContainer.Position = UDim2.new(0, 0, -1, 0)
+            end
+        end
+    end)
     
-    -- ══ CENTRAL CONTENT (all anchored to center) ══
-    -- Skull
-    local skull = makeLabel(introOverlay, {
-        Size = UDim2.new(0, 60, 0, 60),
-        Position = UDim2.new(0.5, 0, 0.5, -42),
+    -- Floating particles (more of them, more variety)
+    for i = 1, 50 do
+        local sz = math.random(1, 5)
+        local p = makeFrame(introOverlay, {
+            Size = UDim2.new(0, sz, 0, sz),
+            Position = UDim2.new(math.random() * 0.9 + 0.05, 0, math.random() * 0.9 + 0.05, 0),
+            BackgroundColor3 = i % 5 == 0 and c.onColor or (i % 3 == 0 and c.accent or (i % 2 == 0 and c.glow or c.particle)),
+            BackgroundTransparency = 0.3 + math.random() * 0.5,
+            ZIndex = 5,
+        })
+        addCorner(p, sz)
+        local dur = 2 + math.random() * 5
+        quickTween(p, dur, {
+            Position = UDim2.new(p.Position.X.Scale + (math.random() - 0.5) * 0.2, 0, p.Position.Y.Scale - 0.15 - math.random() * 0.35, 0),
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, math.max(1, sz - 1), 0, math.max(1, sz - 1)),
+        })
+    end
+
+    -- ══ CENTRAL CONTENT ══
+    
+    -- Energy ring behind skull (pulsing circle)
+    local ring1 = makeFrame(introOverlay, {
+        Size = UDim2.new(0, 1, 0, 1),
+        Position = UDim2.new(0.5, 0, 0.5, -50),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        TextSize = 1,
-        TextColor3 = Color3.new(1, 1, 1),
-        TextTransparency = 1,
-        Text = utf8.char(0x1F480),
-        ZIndex = 320,
+        BackgroundTransparency = 1,
+        ZIndex = 14,
+    })
+    local ringStroke1 = Instance.new("UIStroke")
+    ringStroke1.Color = c.glow
+    ringStroke1.Thickness = 2
+    ringStroke1.Transparency = 1
+    ringStroke1.Parent = ring1
+    addCorner(ring1, 999)
+    
+    local ring2 = ring1:Clone()
+    ring2.Parent = introOverlay
+    local ringStroke2 = ring2:FindFirstChildOfClass("UIStroke")
+    if ringStroke2 then ringStroke2.Color = c.accent end
+    
+    -- Skull IMAGE
+    local skull = makeSkullIcon(introOverlay, 1, {
+        Position = UDim2.new(0.5, 0, 0.5, -50),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ImageTransparency = 1,
+        ZIndex = 20,
     })
     
-    -- Title
+    -- Title (starts invisible)
     local title = makeLabel(introOverlay, {
-        Size = UDim2.new(0, 300, 0, 36),
-        Position = UDim2.new(0.5, 0, 0.5, 2),
+        Size = UDim2.new(0, 500, 0, 50),
+        Position = UDim2.new(0.5, 0, 0.5, 12),
         AnchorPoint = Vector2.new(0.5, 0.5),
         TextSize = 1,
         TextColor3 = c.accent,
         TextTransparency = 1,
         Text = "SPOOKALICIOUS",
-        ZIndex = 320,
+        ZIndex = 20,
     })
     local titleStroke = addStroke(title, c.glow, 3, 1, Enum.ApplyStrokeMode.Contextual)
     
-    -- Thin divider line under title
-    local divider = makeFrame(introOverlay, {
-        Size = UDim2.new(0, 0, 0, 1),
-        Position = UDim2.new(0.5, 0, 0.5, 22),
+    -- Glitch copies of title (offset, different colors)
+    local glitchR = makeLabel(introOverlay, {
+        Size = UDim2.new(0, 500, 0, 50),
+        Position = UDim2.new(0.5, 2, 0.5, 11),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = c.border,
-        BackgroundTransparency = 0.4,
-        ZIndex = 318,
+        TextSize = 1,
+        TextColor3 = Color3.fromRGB(255, 50, 50),
+        TextTransparency = 1,
+        Text = "SPOOKALICIOUS",
+        ZIndex = 19,
+    })
+    local glitchB = makeLabel(introOverlay, {
+        Size = UDim2.new(0, 500, 0, 50),
+        Position = UDim2.new(0.5, -2, 0.5, 13),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        TextSize = 1,
+        TextColor3 = Color3.fromRGB(50, 50, 255),
+        TextTransparency = 1,
+        Text = "SPOOKALICIOUS",
+        ZIndex = 19,
     })
     
-    -- Glow pulse behind divider
+    -- Divider line
+    local divider = makeFrame(introOverlay, {
+        Size = UDim2.new(0, 0, 0, 2),
+        Position = UDim2.new(0.5, 0, 0.5, 38),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = c.border,
+        BackgroundTransparency = 0.3,
+        ZIndex = 18,
+    })
+    addCorner(divider, 1)
     local divGlow = makeFrame(introOverlay, {
-        Size = UDim2.new(0, 0, 0, 6),
-        Position = UDim2.new(0.5, 0, 0.5, 22),
+        Size = UDim2.new(0, 0, 0, 10),
+        Position = UDim2.new(0.5, 0, 0.5, 38),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = c.glow,
-        BackgroundTransparency = 0.8,
-        ZIndex = 317,
+        BackgroundTransparency = 0.7,
+        ZIndex = 17,
     })
-    addCorner(divGlow, 3)
+    addCorner(divGlow, 5)
     
     -- Version
     local ver = makeLabel(introOverlay, {
-        Size = UDim2.new(0, 200, 0, 16),
-        Position = UDim2.new(0.5, 0, 0.5, 34),
+        Size = UDim2.new(0, 200, 0, 18),
+        Position = UDim2.new(0.5, 0, 0.5, 54),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        TextSize = 11,
+        TextSize = 12,
         TextColor3 = c.accentDim,
         TextTransparency = 1,
         Text = "VERSION 4.0",
-        ZIndex = 320,
+        ZIndex = 20,
     })
     
-    -- Loading bar container
+    -- Loading bar (wider)
     local barBg = makeFrame(introOverlay, {
-        Size = UDim2.new(0, 180, 0, 3),
-        Position = UDim2.new(0.5, 0, 0.5, 58),
+        Size = UDim2.new(0, 280, 0, 5),
+        Position = UDim2.new(0.5, 0, 0.5, 80),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = Color3.fromRGB(30, 15, 45),
+        BackgroundColor3 = Color3.fromRGB(25, 12, 40),
         BackgroundTransparency = 1,
-        ZIndex = 318,
+        ZIndex = 18,
     })
-    addCorner(barBg, 2)
-    
-    -- Loading bar fill
+    addCorner(barBg, 3)
     local barFill = makeFrame(barBg, {
         Size = UDim2.new(0, 0, 1, 0),
         BackgroundColor3 = c.accent,
-        BackgroundTransparency = 0.15,
-        ZIndex = 319,
+        BackgroundTransparency = 0.1,
+        ZIndex = 19,
     })
-    addCorner(barFill, 2)
-    
-    -- Bar glow
+    addCorner(barFill, 3)
     local barGlow = makeFrame(barBg, {
-        Size = UDim2.new(0, 0, 0, 8),
+        Size = UDim2.new(0, 0, 0, 14),
         Position = UDim2.new(0, 0, 0.5, 0),
         AnchorPoint = Vector2.new(0, 0.5),
         BackgroundColor3 = c.glow,
-        BackgroundTransparency = 0.7,
-        ZIndex = 317,
+        BackgroundTransparency = 0.6,
+        ZIndex = 17,
     })
-    addCorner(barGlow, 4)
+    addCorner(barGlow, 7)
     
     -- Status text
     local status = makeLabel(introOverlay, {
-        Size = UDim2.new(0, 200, 0, 14),
-        Position = UDim2.new(0.5, 0, 0.5, 72),
+        Size = UDim2.new(0, 280, 0, 14),
+        Position = UDim2.new(0.5, 0, 0.5, 98),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        TextSize = 9,
+        TextSize = 10,
         TextColor3 = c.accentDim,
         TextTransparency = 1,
         Text = "",
-        ZIndex = 320,
+        ZIndex = 20,
     })
     
-    -- Floating particles in background
-    local introParticles = {}
-    for i = 1, 20 do
-        local sz = math.random(1, 3)
-        local p = makeFrame(introOverlay, {
-            Size = UDim2.new(0, sz, 0, sz),
-            Position = UDim2.new(math.random() * 0.9 + 0.05, 0, math.random() * 0.9 + 0.05, 0),
-            BackgroundColor3 = c.particle,
-            BackgroundTransparency = 0.6 + math.random() * 0.3,
-            ZIndex = 303,
-        })
-        addCorner(p, sz)
-        table.insert(introParticles, p)
-        -- Slow float upward
-        quickTween(p, 3 + math.random() * 3, {
-            Position = UDim2.new(p.Position.X.Scale + (math.random() - 0.5) * 0.1, 0, p.Position.Y.Scale - 0.15 - math.random() * 0.2, 0),
-            BackgroundTransparency = 1,
-        })
+    -- Helper: screen shake
+    local function screenShake(intensity, duration)
+        task.spawn(function()
+            local elapsed = 0
+            while elapsed < duration and introOverlay and introOverlay.Parent do
+                local ox = (math.random() - 0.5) * intensity * 2
+                local oy = (math.random() - 0.5) * intensity * 2
+                introOverlay.Position = UDim2.new(0, ox, 0, oy)
+                task.wait(0.02)
+                elapsed = elapsed + 0.02
+                intensity = intensity * 0.95 -- decay
+            end
+            if introOverlay and introOverlay.Parent then
+                introOverlay.Position = UDim2.new(0, 0, 0, 0)
+            end
+        end)
+    end
+    
+    -- Helper: glitch text flicker
+    local function glitchFlicker(dur)
+        task.spawn(function()
+            local t = 0
+            while t < dur and glitchR and glitchR.Parent do
+                glitchR.TextTransparency = 0.5
+                glitchB.TextTransparency = 0.5
+                glitchR.Position = UDim2.new(0.5, math.random(-4, 4), 0.5, 11 + math.random(-2, 2))
+                glitchB.Position = UDim2.new(0.5, math.random(-4, 4), 0.5, 13 + math.random(-2, 2))
+                task.wait(0.03 + math.random() * 0.04)
+                glitchR.TextTransparency = 1
+                glitchB.TextTransparency = 1
+                task.wait(0.05 + math.random() * 0.1)
+                t = t + 0.15
+            end
+        end)
     end
 
     -- ═══════════════════════════════════════
-    --  PHASE 1: Skull materializes (0.0s)
+    --  PHASE 1: Darkness + skull materializes (0.0s)
     -- ═══════════════════════════════════════
+    playSound("boot")
     playSound("intro")
-    task.wait(0.1)
+    task.wait(0.15)
     
-    -- Skull scales in with bounce
+    -- Energy rings expand outward from center
+    quickTween(ring1, 1.2, { Size = UDim2.new(0, 120, 0, 120) }, Enum.EasingStyle.Quad)
+    quickTween(ringStroke1, 0.8, { Transparency = 0.4 })
+    task.delay(0.15, function()
+        quickTween(ring2, 1.4, { Size = UDim2.new(0, 180, 0, 180) }, Enum.EasingStyle.Quad)
+        if ringStroke2 then quickTween(ringStroke2, 1.0, { Transparency = 0.6 }) end
+    end)
+    
+    -- Skull image scales in with impact
     quickTween(skull, 0.6, {
-        TextSize = 42,
-        TextTransparency = 0,
+        Size = UDim2.new(0, 72, 0, 72),
+        ImageTransparency = 0,
     }, Enum.EasingStyle.Back)
     
-    task.wait(0.55)
+    task.wait(0.5)
+    screenShake(6, 0.3) -- impact shake
+    playSound("impact")
     
-    -- Subtle skull float
+    -- Skull gentle float
     task.spawn(function()
-        while skull.Parent do
-            quickTween(skull, 1.5, { Position = UDim2.new(0.5, 0, 0.5, -45) })
+        while skull and skull.Parent do
+            quickTween(skull, 1.5, { Position = UDim2.new(0.5, 0, 0.5, -55) })
             task.wait(1.5)
-            if not skull.Parent then break end
-            quickTween(skull, 1.5, { Position = UDim2.new(0.5, 0, 0.5, -39) })
+            if not skull or not skull.Parent then break end
+            quickTween(skull, 1.5, { Position = UDim2.new(0.5, 0, 0.5, -45) })
             task.wait(1.5)
         end
     end)
     
+    -- Rings fade and pulse
+    task.spawn(function()
+        task.wait(0.5)
+        while ring1 and ring1.Parent do
+            quickTween(ringStroke1, 1, { Transparency = 0.7 })
+            task.wait(1)
+            if not ring1 or not ring1.Parent then break end
+            quickTween(ringStroke1, 1, { Transparency = 0.3 })
+            task.wait(1)
+        end
+    end)
+    
+    task.wait(0.3)
+    
     -- ═══════════════════════════════════════
-    --  PHASE 2: Title + divider (0.6s)
+    --  PHASE 2: Title slams in + glitch (0.8s)
     -- ═══════════════════════════════════════
     playSound("whoosh")
     
-    -- Divider line expands from center
-    quickTween(divider, 0.35, { Size = UDim2.new(0, 200, 0, 1) }, Enum.EasingStyle.Quint)
-    quickTween(divGlow, 0.35, { Size = UDim2.new(0, 200, 0, 6) }, Enum.EasingStyle.Quint)
+    quickTween(divider, 0.35, { Size = UDim2.new(0, 300, 0, 2) }, Enum.EasingStyle.Quint)
+    quickTween(divGlow, 0.35, { Size = UDim2.new(0, 300, 0, 10) }, Enum.EasingStyle.Quint)
     
     task.wait(0.1)
     
-    -- Title scales in
-    quickTween(title, 0.4, {
-        TextSize = 26,
+    -- Title slams in from large
+    title.TextSize = 50
+    title.TextTransparency = 0.5
+    quickTween(title, 0.35, {
+        TextSize = 32,
         TextTransparency = 0,
     }, Enum.EasingStyle.Back)
-    quickTween(titleStroke, 0.4, { Transparency = 0.15 })
+    quickTween(titleStroke, 0.35, { Transparency = 0.05 })
     
-    task.wait(0.35)
+    -- Glitch text effect
+    glitchR.TextSize = 32
+    glitchB.TextSize = 32
+    glitchFlicker(0.8)
+    screenShake(3, 0.15)
+    playSound("glitch")
     
-    -- Version fades in
-    quickTween(ver, 0.3, { TextTransparency = 0.2 })
-    
+    task.wait(0.3)
+    quickTween(ver, 0.25, { TextTransparency = 0.1 })
+    playSound("charge")
     task.wait(0.25)
     
     -- ═══════════════════════════════════════
     --  PHASE 3: Loading bar (1.3s)
     -- ═══════════════════════════════════════
-    quickTween(barBg, 0.2, { BackgroundTransparency = 0.3 })
-    quickTween(status, 0.15, { TextTransparency = 0.3 })
+    quickTween(barBg, 0.15, { BackgroundTransparency = 0.2 })
+    quickTween(status, 0.1, { TextTransparency = 0.2 })
     
     local loadSteps = {
-        { pct = 0.2, text = "LOADING MODULES" },
-        { pct = 0.45, text = "BINDING CONTROLS" },
-        { pct = 0.7, text = "BUILDING INTERFACE" },
-        { pct = 0.9, text = "FINALIZING" },
-        { pct = 1.0, text = "READY" },
+        { pct = 0.15, text = "INITIALIZING CORE" },
+        { pct = 0.30, text = "LOADING MODULES" },
+        { pct = 0.50, text = "BINDING CONTROLS" },
+        { pct = 0.70, text = "BUILDING INTERFACE" },
+        { pct = 0.85, text = "INJECTING HOOKS" },
+        { pct = 0.95, text = "FINALIZING" },
+        { pct = 1.00, text = "READY" },
     }
     
-    for _, step in ipairs(loadSteps) do
+    for idx, step in ipairs(loadSteps) do
         status.Text = step.text
-        quickTween(barFill, 0.18, { Size = UDim2.new(step.pct, 0, 1, 0) }, Enum.EasingStyle.Quad)
-        quickTween(barGlow, 0.18, { Size = UDim2.new(step.pct, 0, 0, 8) }, Enum.EasingStyle.Quad)
-        task.wait(0.16)
+        quickTween(barFill, 0.12, { Size = UDim2.new(step.pct, 0, 1, 0) }, Enum.EasingStyle.Quad)
+        quickTween(barGlow, 0.12, { Size = UDim2.new(step.pct, 0, 0, 14) }, Enum.EasingStyle.Quad)
+        -- Micro-glitch on some steps
+        if idx == 3 or idx == 5 then
+            glitchFlicker(0.15)
+            screenShake(1.5, 0.08)
+        end
+        task.wait(0.12)
     end
     
-    -- Bar flashes on complete
+    -- Bar flashes green on complete
     playSound("introChime")
-    quickTween(barFill, 0.15, { BackgroundColor3 = c.onColor, BackgroundTransparency = 0 })
-    quickTween(barGlow, 0.15, { BackgroundColor3 = c.onColor, BackgroundTransparency = 0.4 })
-    quickTween(status, 0.15, { TextColor3 = c.onColor })
+    quickTween(barFill, 0.12, { BackgroundColor3 = c.onColor, BackgroundTransparency = 0 })
+    quickTween(barGlow, 0.12, { BackgroundColor3 = c.onColor, BackgroundTransparency = 0.2 })
+    quickTween(status, 0.12, { TextColor3 = c.onColor })
+    screenShake(4, 0.2)
     
-    task.wait(0.4)
+    task.wait(0.5)
     
     -- ═══════════════════════════════════════
-    --  PHASE 4: Particle burst + exit (2.5s)
+    --  PHASE 4: Massive burst + exit
     -- ═══════════════════════════════════════
+    playSound("impact")
+    screenShake(8, 0.4)
     
-    -- Circular burst from center
+    -- Massive circular particle burst
     if State.particles then
-        for i = 1, 24 do
-            local angle = (i / 24) * math.pi * 2
-            local sz = math.random(2, 4)
+        for i = 1, 48 do
+            local angle = (i / 48) * math.pi * 2
+            local sz = math.random(2, 6)
             local p = makeFrame(introOverlay, {
                 Size = UDim2.new(0, sz, 0, sz),
                 Position = UDim2.new(0.5, 0, 0.5, 0),
                 AnchorPoint = Vector2.new(0.5, 0.5),
-                BackgroundColor3 = i % 2 == 0 and c.accent or c.glow,
-                BackgroundTransparency = 0.05,
-                ZIndex = 325,
+                BackgroundColor3 = i % 4 == 0 and c.onColor or (i % 3 == 0 and Color3.new(1,1,1) or (i % 2 == 0 and c.accent or c.glow)),
+                BackgroundTransparency = 0,
+                ZIndex = 25,
             })
             addCorner(p, sz)
-            local dist = 100 + math.random() * 120
-            quickTween(p, 0.5 + math.random() * 0.4, {
-                Position = UDim2.new(0.5 + math.cos(angle) * (dist / 500), 0, 0.5 + math.sin(angle) * (dist / 400), 0),
+            local dist = 150 + math.random() * 250
+            quickTween(p, 0.4 + math.random() * 0.5, {
+                Position = UDim2.new(0.5 + math.cos(angle) * (dist / 350), 0, 0.5 + math.sin(angle) * (dist / 300), 0),
                 BackgroundTransparency = 1,
                 Size = UDim2.new(0, 1, 0, 1),
             }, Enum.EasingStyle.Quad)
         end
+        
+        -- Additional radial lines burst
+        for i = 1, 16 do
+            local angle = (i / 16) * math.pi * 2
+            local line = makeFrame(introOverlay, {
+                Size = UDim2.new(0, 2, 0, 0),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0.5, 0),
+                Rotation = math.deg(angle) - 90,
+                BackgroundColor3 = c.accent,
+                BackgroundTransparency = 0.2,
+                ZIndex = 24,
+            })
+            quickTween(line, 0.5, {
+                Size = UDim2.new(0, 2, 0, 100 + math.random() * 80),
+                BackgroundTransparency = 1,
+            })
+        end
     end
     
-    -- Bright flash
+    -- Bright white flash (more intense)
     local flash = makeFrame(introOverlay, {
         Size = UDim2.new(1, 0, 1, 0),
-        BackgroundColor3 = c.glow,
-        BackgroundTransparency = 0.7,
-        ZIndex = 330,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.3,
+        ZIndex = 30,
     })
-    quickTween(flash, 0.4, { BackgroundTransparency = 1 })
+    quickTween(flash, 0.6, { BackgroundTransparency = 1 })
     
     task.wait(0.15)
     
-    -- Everything fades + scales
-    quickTween(skull, 0.35, { TextTransparency = 1, TextSize = 55 }, Enum.EasingStyle.Quad)
-    quickTween(title, 0.3, { TextTransparency = 1, TextSize = 30 }, Enum.EasingStyle.Quad)
-    quickTween(titleStroke, 0.3, { Transparency = 1 })
-    quickTween(ver, 0.25, { TextTransparency = 1 })
-    quickTween(status, 0.2, { TextTransparency = 1 })
-    quickTween(barBg, 0.25, { BackgroundTransparency = 1 })
-    quickTween(barFill, 0.25, { BackgroundTransparency = 1 })
-    quickTween(barGlow, 0.25, { BackgroundTransparency = 1 })
-    quickTween(divider, 0.3, { Size = UDim2.new(0, 0, 0, 1), BackgroundTransparency = 1 })
-    quickTween(divGlow, 0.3, { Size = UDim2.new(0, 0, 0, 6), BackgroundTransparency = 1 })
+    -- Everything fades out
+    quickTween(skull, 0.3, { ImageTransparency = 1, Size = UDim2.new(0, 90, 0, 90) }, Enum.EasingStyle.Quad)
+    quickTween(title, 0.25, { TextTransparency = 1, TextSize = 38 }, Enum.EasingStyle.Quad)
+    quickTween(titleStroke, 0.25, { Transparency = 1 })
+    quickTween(glitchR, 0.2, { TextTransparency = 1 })
+    quickTween(glitchB, 0.2, { TextTransparency = 1 })
+    quickTween(ver, 0.2, { TextTransparency = 1 })
+    quickTween(status, 0.15, { TextTransparency = 1 })
+    quickTween(barBg, 0.2, { BackgroundTransparency = 1 })
+    quickTween(barFill, 0.2, { BackgroundTransparency = 1 })
+    quickTween(barGlow, 0.2, { BackgroundTransparency = 1 })
+    quickTween(divider, 0.25, { Size = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1 })
+    quickTween(divGlow, 0.25, { Size = UDim2.new(0, 0, 0, 10), BackgroundTransparency = 1 })
+    quickTween(ringStroke1, 0.3, { Transparency = 1 })
+    if ringStroke2 then quickTween(ringStroke2, 0.3, { Transparency = 1 }) end
     
     task.wait(0.2)
     
-    -- Overlay dissolves
-    quickTween(introOverlay, 0.45, { BackgroundTransparency = 1 })
-    quickTween(vignette, 0.45, { BackgroundTransparency = 1 })
+    -- Overlay + blur + color correction dissolve
+    quickTween(introOverlay, 0.5, { BackgroundTransparency = 1 })
+    quickTween(vignette, 0.5, { BackgroundTransparency = 1 })
+    quickTween(blur, 0.7, { Size = 0 })
+    quickTween(cc, 0.7, { Brightness = 0, Contrast = 0, Saturation = 0, TintColor = Color3.new(1,1,1) })
     
-    task.wait(0.5)
-    introOverlay:Destroy()
+    task.wait(0.7)
+    introGui:Destroy()
+    blur:Destroy()
+    cc:Destroy()
     
-    -- Hint bar slides in cleanly
+    -- Hint bar slides in
     if not isMobile then
         hintFrame.Visible = true
         hintFrame.Position = UDim2.new(1, -365, 0, -30)
