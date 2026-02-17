@@ -365,8 +365,15 @@ gui.Name = "SpookaliciousV4"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.IgnoreGuiInset = false
-gui.DisplayOrder = 999999
-gui.Parent = playerGui
+gui.DisplayOrder = 2147483647
+local guiParented = false
+pcall(function()
+    gui.Parent = game:GetService("CoreGui")
+    guiParented = true
+end)
+if not guiParented then
+    gui.Parent = playerGui
+end
 
 ------------------------------------------------------------------------
 --  UTILITY HELPERS
@@ -1197,6 +1204,7 @@ local function updateTabBar()
         addCorner(btn, 5)
         
         local lbl = makeLabel(btn, {
+            Name = "TabLabel",
             Size = UDim2.new(1, 0, 1, 0),
             TextSize = 11,
             TextColor3 = isActive and c.accent or c.accentDim,
@@ -1209,6 +1217,7 @@ local function updateTabBar()
         if isActive then
             -- Active indicator line at bottom
             local indicator = makeFrame(btn, {
+                Name = "ActiveLine",
                 Size = UDim2.new(0.7, 0, 0, 2),
                 Position = UDim2.new(0.15, 0, 1, -3),
                 BackgroundColor3 = c.accent,
@@ -1218,10 +1227,11 @@ local function updateTabBar()
             addCorner(indicator, 1)
         end
         
+        -- Click handler: set flag, let heartbeat do the switch
+        local tabIdx = i  -- capture for closure
         btn.Activated:Connect(function()
-            if i ~= State.activeTab then
-                -- Defer so button click event finishes before buttons get rebuilt
-                task.defer(function() switchTab(i) end)
+            if tabIdx ~= State.activeTab then
+                State._pendingTabSwitch = tabIdx
             end
         end)
         
@@ -1232,33 +1242,46 @@ end
 function switchTab(idx)
     if idx < 1 or idx > #State.tabs then return end
     local tab = State.tabs[idx]
+    
+    -- Reset ALL state before anything visual
     State.activeTab = idx
     State.pages = tab.pages
     State.pageOrder = tab.pageOrder
     State.title = tab.name
     State.version = tab.version
-    
-    -- Update title display
-    titleLabel.Text = State.title
-    glitchRed.Text = State.title
-    glitchGreen.Text = State.title
-    versionLabel.Text = State.version
-    
-    -- Reset navigation to home
     State.currentView = "home"
     State.sel = 1
     State.stack = {}
+    State._savedView = "home"
+    State._savedSel = 1
+    State._savedStack = {}
     
-    -- Rebuild tab bar FIRST so highlight updates
-    updateTabBar()
+    -- Update title display (safe, these always exist)
+    pcall(function()
+        titleLabel.Text = State.title
+        glitchRed.Text = State.title
+        glitchGreen.Text = State.title
+        versionLabel.Text = State.version
+    end)
     
     playSound("page")
     
-    -- Then render the content
+    -- Rebuild tab bar (safe - no button is mid-click anymore)
+    pcall(updateTabBar)
+    
+    -- Render the content
     State._animateItems = true
-    renderView()
+    pcall(renderView)
     State._animateItems = false
 end
+
+-- Heartbeat-driven tab switch (avoids destroying buttons mid-click)
+RS.Heartbeat:Connect(function()
+    local idx = State._pendingTabSwitch
+    if not idx then return end
+    State._pendingTabSwitch = nil
+    pcall(switchTab, idx)
+end)
 
 ------------------------------------------------------------------------
 --  SUBTITLE BANNER
@@ -2480,26 +2503,20 @@ end
 ------------------------------------------------------------------------
 
 -- Cursor management: DO NOT fight the game's camera system.
--- The GUI uses keyboard navigation primarily. Mouse clicking works
--- through Activated/MouseButton1Down events regardless of MouseBehavior.
--- First person, shift lock, and third person all work normally.
+-- Mouse clicks work on GUI elements regardless of cursor lock state.
+-- ONLY mouse mode (V key) temporarily frees the cursor.
 local _cursorConn = nil
+local _savedMouseBehavior = nil
+local _savedMouseIcon = nil
 
-local function unlockCursor()
-    -- No-op: don't touch MouseBehavior. The game controls it.
-    -- Mouse clicks work on GUI elements regardless of cursor lock state.
-end
-
-local function restoreCursor()
-    -- Cleanup any leftover connections (safety)
-    if _cursorConn then _cursorConn:Disconnect(); _cursorConn = nil end
-end
+local function unlockCursor() end
+local function restoreCursor() end
 
 local function enableMouseMode()
     if State.mouseMode then return end  -- already on
     State.mouseMode = true
     unbindKeys()
-    -- Cursor stays unlocked (set by toggleMenu open)
+    unlockCursor()  -- Free the mouse for clicking
     showToast("Mouse Mode ON - V to exit")
     renderView()
 end
@@ -2507,10 +2524,10 @@ end
 local function disableMouseMode()
     if not State.mouseMode then return end  -- already off
     State.mouseMode = false
+    restoreCursor()  -- Give mouse back to the game (first person etc.)
     if State.visible then
         bindKeys()
     end
-    -- Cursor stays unlocked (menu still open)
     showToast("Mouse Mode OFF")
     renderView()
 end
@@ -2605,7 +2622,8 @@ function toggleMenu(show)
         end)
 
         playSound("open")
-        unlockCursor()  -- Free the mouse so clicking always works
+        -- DON'T touch cursor here. Only V (mouse mode) unlocks cursor.
+        -- Keyboard navigation works regardless of cursor state.
         
         if isMobile then
             showMobileUI()
@@ -3735,6 +3753,14 @@ function Library:CreateWindow(title, version)
     State.title = title
     State.version = version
 
+    -- Reset to home view for new tab
+    State.currentView = "home"
+    State.sel = 1
+    State.stack = {}
+    State._savedView = "home"
+    State._savedSel = 1
+    State._savedStack = {}
+
     titleLabel.Text = State.title
     glitchRed.Text = State.title
     glitchGreen.Text = State.title
@@ -3747,17 +3773,8 @@ function Library:CreateWindow(title, version)
     -- Update tab bar (shows when 2+ tabs exist)
     updateTabBar()
 
-    -- If this is a 2nd+ tab, auto-switch to it and refresh the view
-    if #State.tabs > 1 then
-        State.currentView = "home"
-        State.sel = 1
-        State.stack = {}
-        if State.visible then
-            State._animateItems = true
-            renderView()
-            State._animateItems = false
-        end
-    end
+    -- Clear stale content from previous tab immediately
+    clearItems()
 
     local Window = {}
     Window.__index = Window
@@ -3780,6 +3797,22 @@ function Library:CreateWindow(title, version)
         if State.activeTab == _myTabIdx then
             State.pages = _myPages
             State.pageOrder = _myPageOrder
+        end
+        
+        -- Schedule a deferred render so ALL pages/sections added in the same
+        -- script tick are captured in one render pass (avoids partial renders)
+        if not State._pendingRender then
+            State._pendingRender = true
+            task.defer(function()
+                State._pendingRender = false
+                -- Re-check this tab is still active
+                if State.activeTab == _myTabIdx then
+                    State.pages = _myPages
+                    State.pageOrder = _myPageOrder
+                    State.currentView = "home"
+                    pcall(renderView)
+                end
+            end)
         end
 
         local Page = {}
