@@ -1269,10 +1269,15 @@ function switchTab(idx)
     -- Rebuild tab bar (safe - no button is mid-click anymore)
     pcall(updateTabBar)
     
-    -- Render the content
+   -- Render the content
     State._animateItems = true
     pcall(renderView)
     State._animateItems = false
+    
+    -- Deferred second render fixes blank display after tab switch
+    task.defer(function()
+        pcall(renderView)
+    end)
 end
 
 -- Heartbeat-driven tab switch (avoids destroying buttons mid-click)
