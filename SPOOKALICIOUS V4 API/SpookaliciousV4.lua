@@ -1270,13 +1270,16 @@ function switchTab(idx)
     pcall(updateTabBar)
     
    -- Render the content
+    clearItems()  -- force clear old tab's items first
     State._animateItems = true
     pcall(renderView)
     State._animateItems = false
     
-    -- Deferred second render fixes blank display after tab switch
     task.defer(function()
-        pcall(renderView)
+        if State.activeTab == idx then
+            clearItems()
+            pcall(renderView)
+        end
     end)
 end
 
