@@ -1269,11 +1269,16 @@ function switchTab(idx)
     -- Rebuild tab bar
     pcall(updateTabBar)
     
-    -- Quick close then reopen to refresh
-    toggleMenu(false)
-    task.delay(0.35, function()
-        State._toggling = false  -- force clear debounce
-        toggleMenu(true)
+    -- Force visual refresh
+    clearItems()
+    State._animateItems = true
+    pcall(renderView)
+    State._animateItems = false
+    
+    -- Flicker frame to force layout update
+    mainFrame.Visible = false
+    task.defer(function()
+        mainFrame.Visible = true
     end)
 end
 
