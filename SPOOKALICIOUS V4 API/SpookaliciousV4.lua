@@ -1268,15 +1268,17 @@ function switchTab(idx)
     pcall(updateTabBar)
     
     task.spawn(function()
-        -- Destroy ALL children directly, don't rely on itemInstances tracking
-        for _, v in ipairs(itemsFrame:GetChildren()) do
-            v:Destroy()
-        end
-        itemInstances = {}
+        task.wait(0.05)
+        clearItems()
         State.currentView = "home"
         State.sel = 1
         State.stack = {}
+        State._animateItems = true
         renderView()
+        State._animateItems = false
+        itemsFrame.CanvasPosition = Vector2.new(0, 0)
+        task.wait()
+        renderView() -- second pass after layout settles
     end)
 end
 
