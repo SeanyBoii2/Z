@@ -127,12 +127,8 @@ end
 
 local GAME_SCRIPTS = {
     {
-        Name = "Michales Zombies",
-        URL = "https://raw.githubusercontent.com/PLACEHOLDER/PLACEHOLDER/main/MichalesZombies.lua",
-    },
-    {
-        Name = "Zombies 2",
-        URL = "https://raw.githubusercontent.com/PLACEHOLDER/PLACEHOLDER/main/Zombies2.lua",
+        Name = "Michael's Zombies",
+        URL = "https://raw.githubusercontent.com/SeanyBoii2/Game-Scripts/refs/heads/main/Michaels%20Zombies",
     },
 }
 
