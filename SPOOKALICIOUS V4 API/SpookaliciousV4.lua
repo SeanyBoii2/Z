@@ -585,7 +585,7 @@ local toastContainer = makeFrame(gui, {
 })
 
 local activeToasts = {}
-local MAX_TOASTS = 5
+local MAX_TOASTS = 4
 local TOAST_H = 36
 local TOAST_GAP = 5
 local TOAST_DURATION = 3.0
