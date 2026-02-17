@@ -1265,19 +1265,14 @@ function switchTab(idx)
     end)
     
  playSound("page")
+    
+    -- Rebuild tab bar
     pcall(updateTabBar)
     
-    task.spawn(function()
-        task.wait(0.05)
-        clearItems()
-        State.currentView = "home"
-        State.sel = 1
-        State.stack = {}
-        renderView()
-        itemsFrame.Visible = false
-        task.wait()
-        itemsFrame.Visible = true
-    end)
+    -- Force reopen
+    State._toggling = false
+    State.visible = false
+    toggleMenu(true)
 end
 
 -- Heartbeat-driven tab switch (avoids destroying buttons mid-click)
