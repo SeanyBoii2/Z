@@ -1272,6 +1272,7 @@ function switchTab(idx)
     -- Quick close then reopen to refresh
     toggleMenu(false)
     task.delay(0.35, function()
+        State._toggling = false  -- force clear debounce
         toggleMenu(true)
     end)
 end
