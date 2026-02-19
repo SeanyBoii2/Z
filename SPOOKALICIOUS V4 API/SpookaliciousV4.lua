@@ -365,15 +365,8 @@ gui.Name = "SpookaliciousV4"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.IgnoreGuiInset = false
-gui.DisplayOrder = 2147483647
-local guiParented = false
-pcall(function()
-    gui.Parent = game:GetService("CoreGui")
-    guiParented = true
-end)
-if not guiParented then
-    gui.Parent = playerGui
-end
+gui.DisplayOrder = 999999
+gui.Parent = playerGui
 
 ------------------------------------------------------------------------
 --  UTILITY HELPERS
@@ -585,7 +578,7 @@ local toastContainer = makeFrame(gui, {
 })
 
 local activeToasts = {}
-local MAX_TOASTS = 4
+local MAX_TOASTS = 5
 local TOAST_H = 36
 local TOAST_GAP = 5
 local TOAST_DURATION = 3.0
@@ -1264,12 +1257,12 @@ function switchTab(idx)
         versionLabel.Text = State.version
     end)
     
- playSound("page")
+    playSound("page")
     
-    -- Rebuild tab bar
+    -- Rebuild tab bar (safe - no button is mid-click anymore)
     pcall(updateTabBar)
     
-    -- Force reopen
+    -- Force reopen the menu to guarantee fresh render
     State._toggling = false
     State.visible = false
     toggleMenu(true)
@@ -1504,6 +1497,11 @@ local H_DROP    = 42
 local H_KEYBIND = 42
 local H_SECTION = 28
 local H_PAGE    = 40
+local H_IMAGECARD    = 110
+local H_SPINNER      = 34
+local H_BADGE        = 24
+local H_SCROLLGRID   = 180
+local H_DIVIDERLABEL = 20
 
 ------------------------------------------------------------------------
 --  ITEM RENDERING
@@ -1529,12 +1527,19 @@ local function getItemHeight(item)
     elseif item.type == "page_link" then return H_PAGE
     elseif item.type == "label" then return H_ITEM
     elseif item.type == "divider" then return 12
+    elseif item.type == "image_card" then return item._height or H_IMAGECARD
+    elseif item.type == "spinner" then return H_SPINNER
+    elseif item.type == "badge" then return H_BADGE
+    elseif item.type == "scroll_grid" then return item._height or H_SCROLLGRID
+    elseif item.type == "divider_label" then return H_DIVIDERLABEL
     else return H_ITEM end
 end
 
 -- Non-interactive types that should be skipped during keyboard nav
 local function isNonInteractive(itemType)
     return itemType == "section_header" or itemType == "label" or itemType == "divider"
+        or itemType == "spinner" or itemType == "badge" or itemType == "divider_label"
+        or itemType == "scroll_grid"
 end
 
 -- Forward declare
@@ -1905,26 +1910,54 @@ local function createItemUI(index, item, yPos)
         end
 
     elseif item.type == "button" then
-        -- Execute icon
-        makeLabel(frame, {
+        local isLoading = item._loading
+        local displayColor = isLoading and Color3.fromRGB(80, 80, 80) or (sel and c.glow or c.accentDim)
+        local textColor = isLoading and Color3.fromRGB(100, 100, 100) or (sel and c.accent or c.accentDim)
+        
+        -- Execute icon or spinner
+        local iconLabel = makeLabel(frame, {
             Size = UDim2.new(0, 20, 1, 0),
             Position = UDim2.new(0, 10, 0, 0),
             TextSize = 12,
-            TextColor3 = sel and c.glow or c.accentDim,
-            Text = "▶",
+            TextColor3 = displayColor,
+            Text = isLoading and "◌" or "▶",
             ZIndex = 27,
         })
+        
+        -- Spin the icon while loading
+        if isLoading then
+            task.spawn(function()
+                local rot = 0
+                while iconLabel and iconLabel.Parent and item._loading do
+                    rot = (rot + 8) % 360
+                    iconLabel.Rotation = rot
+                    task.wait(0.03)
+                end
+                if iconLabel and iconLabel.Parent then iconLabel.Rotation = 0 end
+            end)
+        end
         
         local lbl = makeLabel(frame, {
             Size = UDim2.new(1, -40, 1, 0),
             Position = UDim2.new(0, 30, 0, 0),
             TextSize = 15,
-            TextColor3 = sel and c.accent or c.accentDim,
+            TextColor3 = textColor,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Text = string.upper(item.label),
+            Text = isLoading and (string.upper(item.label) .. "...") or string.upper(item.label),
             ZIndex = 27,
         })
         addStroke(lbl, c.bg, 1, sel and 0.2 or 0.5, Enum.ApplyStrokeMode.Contextual)
+        
+        -- Dim overlay when loading
+        if isLoading then
+            local overlay = makeFrame(frame, {
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundColor3 = Color3.new(0, 0, 0),
+                BackgroundTransparency = 0.7,
+                ZIndex = 28,
+            })
+            addCorner(overlay, 3)
+        end
 
     elseif item.type == "textbox" then
         makeLabel(frame, {
@@ -1963,6 +1996,12 @@ local function createItemUI(index, item, yPos)
         tb.FocusLost:Connect(function(enter)
             item.value = tb.Text
             if item.callback then item.callback(tb.Text) end
+        end)
+        
+        -- Live keystroke callback: fires on every character typed
+        tb:GetPropertyChangedSignal("Text"):Connect(function()
+            item.value = tb.Text
+            if item._liveCallback then item._liveCallback(tb.Text) end
         end)
 
     elseif item.type == "dropdown" then
@@ -2053,10 +2092,329 @@ local function createItemUI(index, item, yPos)
             ZIndex = 27,
         })
         addCorner(line, 1)
+
+    -- ═══ IMAGE CARD ═══
+    elseif item.type == "image_card" then
+        local cardH = item._height or H_IMAGECARD
+        local thumbW = 64
+        
+        -- Card background
+        local cardBg = makeFrame(frame, {
+            Size = UDim2.new(1, -8, 0, cardH - 6),
+            Position = UDim2.new(0, 4, 0, 3),
+            BackgroundColor3 = c.bgLight,
+            BackgroundTransparency = 0.25,
+            ZIndex = 27,
+        })
+        addCorner(cardBg, 5)
+        addStroke(cardBg, sel and c.border or c.inputBorder, 1, sel and 0.3 or 0.65)
+        
+        -- Thumbnail image
+        if item.imageUrl and item.imageUrl ~= "" then
+            local thumb = Instance.new("ImageLabel")
+            thumb.Size = UDim2.new(0, thumbW, 0, thumbW)
+            thumb.Position = UDim2.new(0, 6, 0.5, 0)
+            thumb.AnchorPoint = Vector2.new(0, 0.5)
+            thumb.BackgroundColor3 = c.inputBg
+            thumb.BackgroundTransparency = 0.2
+            thumb.Image = item.imageUrl
+            thumb.ScaleType = Enum.ScaleType.Crop
+            thumb.ZIndex = 28
+            thumb.Parent = cardBg
+            addCorner(thumb, 4)
+        else
+            -- Placeholder icon
+            local placeholder = makeFrame(cardBg, {
+                Size = UDim2.new(0, thumbW, 0, thumbW),
+                Position = UDim2.new(0, 6, 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundColor3 = c.inputBg,
+                BackgroundTransparency = 0.2,
+                ZIndex = 28,
+            })
+            addCorner(placeholder, 4)
+            makeLabel(placeholder, {
+                Size = UDim2.new(1, 0, 1, 0),
+                TextSize = 28,
+                TextColor3 = c.accentDim,
+                Text = "◆",
+                ZIndex = 29,
+            })
+        end
+        
+        -- Title
+        local titleLbl = makeLabel(cardBg, {
+            Size = UDim2.new(1, -thumbW - 18, 0, 18),
+            Position = UDim2.new(0, thumbW + 12, 0, 6),
+            TextSize = 13,
+            TextColor3 = sel and c.accent or c.accentDim,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            Text = item.cardTitle or "Untitled",
+            ZIndex = 29,
+        })
+        addStroke(titleLbl, c.bg, 0.8, 0.4, Enum.ApplyStrokeMode.Contextual)
+        
+        -- Subtitle / description
+        if item.cardSubtitle then
+            makeLabel(cardBg, {
+                Size = UDim2.new(1, -thumbW - 18, 0, 14),
+                Position = UDim2.new(0, thumbW + 12, 0, 26),
+                TextSize = 10,
+                TextColor3 = c.accentDim,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Text = item.cardSubtitle,
+                ZIndex = 29,
+            })
+        end
+        
+        -- Badges row
+        if item.cardBadges and #item.cardBadges > 0 then
+            local bx = thumbW + 12
+            for _, badge in ipairs(item.cardBadges) do
+                local bText = badge.label or "TAG"
+                local bColor = badge.color or c.glow
+                local bWidth = #bText * 6 + 12
+                local badgeFrame = makeFrame(cardBg, {
+                    Size = UDim2.new(0, bWidth, 0, 14),
+                    Position = UDim2.new(0, bx, 0, 42),
+                    BackgroundColor3 = bColor,
+                    BackgroundTransparency = 0.6,
+                    ZIndex = 29,
+                })
+                addCorner(badgeFrame, 3)
+                makeLabel(badgeFrame, {
+                    Size = UDim2.new(1, 0, 1, 0),
+                    TextSize = 8,
+                    TextColor3 = Color3.new(1, 1, 1),
+                    Text = string.upper(bText),
+                    ZIndex = 30,
+                    Font = Enum.Font.GothamBold,
+                })
+                bx = bx + bWidth + 4
+            end
+        end
+        
+        -- Action buttons
+        if item.cardButtons and #item.cardButtons > 0 then
+            local btnY = cardH - 30
+            local btnX = thumbW + 12
+            for bi, bDef in ipairs(item.cardButtons) do
+                if bi > 2 then break end -- max 2 buttons
+                local bWidth = math.max(#(bDef.label or "Action") * 7 + 16, 60)
+                local isAccent = (bi == 1)
+                
+                local cardBtn = Instance.new("TextButton")
+                cardBtn.Size = UDim2.new(0, bWidth, 0, 20)
+                cardBtn.Position = UDim2.new(0, btnX, 0, btnY)
+                cardBtn.BackgroundColor3 = isAccent and c.glow or c.bgLight
+                cardBtn.BackgroundTransparency = isAccent and 0.4 or 0.2
+                cardBtn.Text = ""
+                cardBtn.ZIndex = 30
+                cardBtn.AutoButtonColor = false
+                cardBtn.Active = true
+                cardBtn.Parent = cardBg
+                addCorner(cardBtn, 4)
+                addStroke(cardBtn, isAccent and c.glow or c.border, 1, isAccent and 0.3 or 0.6)
+                
+                makeLabel(cardBtn, {
+                    Size = UDim2.new(1, 0, 1, 0),
+                    TextSize = 10,
+                    TextColor3 = isAccent and c.accent or c.accentDim,
+                    Text = string.upper(bDef.label or "Action"),
+                    ZIndex = 31,
+                    Font = Enum.Font.GothamBold,
+                })
+                
+                cardBtn.Activated:Connect(function()
+                    playSound("select")
+                    if bDef.callback then bDef.callback() end
+                end)
+                
+                cardBtn.MouseEnter:Connect(function()
+                    quickTween(cardBtn, 0.12, { BackgroundTransparency = isAccent and 0.2 or 0.05 })
+                end)
+                cardBtn.MouseLeave:Connect(function()
+                    quickTween(cardBtn, 0.15, { BackgroundTransparency = isAccent and 0.4 or 0.2 })
+                end)
+                
+                btnX = btnX + bWidth + 6
+            end
+        end
+        
+        -- Store refs for Update() method
+        item._uiRefs = {
+            cardBg = cardBg,
+            titleLbl = titleLbl,
+        }
+
+    -- ═══ SPINNER ═══
+    elseif item.type == "spinner" then
+        local spinIcon = makeLabel(frame, {
+            Size = UDim2.new(0, 20, 1, 0),
+            Position = UDim2.new(0, 10, 0, 0),
+            TextSize = 14,
+            TextColor3 = c.glow,
+            Text = "◌",
+            ZIndex = 27,
+        })
+        
+        -- Animate rotation
+        task.spawn(function()
+            local rot = 0
+            while spinIcon and spinIcon.Parent do
+                rot = (rot + 6) % 360
+                spinIcon.Rotation = rot
+                task.wait(0.025)
+            end
+        end)
+        
+        makeLabel(frame, {
+            Size = UDim2.new(1, -40, 1, 0),
+            Position = UDim2.new(0, 34, 0, 0),
+            TextSize = 12,
+            TextColor3 = c.accentDim,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Text = item.label or "Loading...",
+            ZIndex = 27,
+        })
+        
+        -- Pulsing background
+        task.spawn(function()
+            while frame and frame.Parent do
+                quickTween(frame, 0.8, { BackgroundTransparency = 0.88 })
+                task.wait(0.8)
+                if not frame or not frame.Parent then break end
+                quickTween(frame, 0.8, { BackgroundTransparency = 0.95 })
+                task.wait(0.8)
+            end
+        end)
+
+    -- ═══ BADGE ═══
+    elseif item.type == "badge" then
+        local badgeColor = item.badgeColor or c.glow
+        local badgeText = item.label or "TAG"
+        local badgeW = math.max(#badgeText * 7 + 16, 40)
+        
+        local badgeBg = makeFrame(frame, {
+            Size = UDim2.new(0, badgeW, 0, 18),
+            Position = UDim2.new(0, 10, 0.5, -9),
+            BackgroundColor3 = badgeColor,
+            BackgroundTransparency = 0.45,
+            ZIndex = 28,
+        })
+        addCorner(badgeBg, 4)
+        addStroke(badgeBg, badgeColor, 1, 0.5)
+        
+        makeLabel(badgeBg, {
+            Size = UDim2.new(1, 0, 1, 0),
+            TextSize = 9,
+            TextColor3 = Color3.new(1, 1, 1),
+            Text = string.upper(badgeText),
+            ZIndex = 29,
+            Font = Enum.Font.GothamBold,
+        })
+
+    -- ═══ SCROLL GRID ═══
+    elseif item.type == "scroll_grid" then
+        local gridH = item._height or H_SCROLLGRID
+        local cellSize = item._cellSize or 120
+        
+        local gridContainer = makeFrame(frame, {
+            Size = UDim2.new(1, -8, 0, gridH - 4),
+            Position = UDim2.new(0, 4, 0, 2),
+            BackgroundColor3 = c.bgLight,
+            BackgroundTransparency = 0.5,
+            ZIndex = 27,
+        })
+        addCorner(gridContainer, 4)
+        addStroke(gridContainer, c.inputBorder, 1, 0.7)
+        
+        local gridScroll = Instance.new("ScrollingFrame")
+        gridScroll.Name = "GridScroll"
+        gridScroll.Size = UDim2.new(1, -4, 1, -4)
+        gridScroll.Position = UDim2.new(0, 2, 0, 2)
+        gridScroll.BackgroundTransparency = 1
+        gridScroll.BorderSizePixel = 0
+        gridScroll.ScrollBarThickness = 3
+        gridScroll.ScrollBarImageColor3 = c.border
+        gridScroll.ScrollBarImageTransparency = 0.4
+        gridScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        gridScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        gridScroll.ZIndex = 28
+        gridScroll.Parent = gridContainer
+        
+        local gridLayout = Instance.new("UIGridLayout")
+        gridLayout.CellSize = UDim2.new(0, cellSize, 0, cellSize + 30)
+        gridLayout.CellPadding = UDim2.new(0, 6, 0, 6)
+        gridLayout.FillDirection = Enum.FillDirection.Horizontal
+        gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        gridLayout.Parent = gridScroll
+        
+        local gridPadding = Instance.new("UIPadding")
+        gridPadding.PaddingTop = UDim.new(0, 3)
+        gridPadding.PaddingLeft = UDim.new(0, 3)
+        gridPadding.PaddingRight = UDim.new(0, 3)
+        gridPadding.Parent = gridScroll
+        
+        -- Store refs so external code can add cards
+        item._gridScroll = gridScroll
+        item._gridLayout = gridLayout
+        item._gridContainer = gridContainer
+        item._gridCards = {}
+
+    -- ═══ DIVIDER LABEL ═══
+    elseif item.type == "divider_label" then
+        local divText = item.label or "──────"
+        
+        -- Left line
+        local lineL = makeFrame(frame, {
+            Size = UDim2.new(0.2, 0, 0, 1),
+            Position = UDim2.new(0, 12, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = c.border,
+            BackgroundTransparency = 0.45,
+            ZIndex = 27,
+        })
+        addCorner(lineL, 1)
+        addGradient(lineL, NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 0),
+        }))
+        
+        -- Center text
+        makeLabel(frame, {
+            Size = UDim2.new(0.6, 0, 1, 0),
+            Position = UDim2.new(0.2, 0, 0, 0),
+            TextSize = 9,
+            TextColor3 = c.accentDim,
+            Text = "── " .. string.upper(divText) .. " ──",
+            ZIndex = 27,
+            Font = Enum.Font.Code,
+        })
+        
+        -- Right line
+        local lineR = makeFrame(frame, {
+            Size = UDim2.new(0.2, 0, 0, 1),
+            Position = UDim2.new(0.8, -12, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = c.border,
+            BackgroundTransparency = 0.45,
+            ZIndex = 27,
+        })
+        addCorner(lineR, 1)
+        addGradient(lineR, NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }))
     end
 
     -- Click zone (always works, keyboard mode AND mouse mode)
-    if not isNonInteractive(item.type) and item.type ~= "textbox" then
+    if not isNonInteractive(item.type) and item.type ~= "textbox" and item.type ~= "image_card" and item.type ~= "scroll_grid" then
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, math.min(h, H_DROP))
         btn.BackgroundTransparency = 1
@@ -2101,24 +2459,22 @@ local function buildFlatItems()
     State.flatItems = {}
 
     if State.currentView == "home" then
- for _, entry in ipairs(State.pageOrder) do
-    if type(entry) == "table" then
-        if entry.__type == "divider" then
-            table.insert(State.flatItems, { type = "divider", label = "---" })
-        elseif entry.__type == "section" then
-            table.insert(State.flatItems, { type = "section_header", label = entry.label })
+        for _, pageId in ipairs(State.pageOrder) do
+            -- Special markers for home menu organization
+            if type(pageId) == "string" and pageId:sub(1, 10) == "__divider_" then
+                table.insert(State.flatItems, { type = "divider" })
+            elseif type(pageId) == "string" and pageId:sub(1, 10) == "__section_" then
+                local name = pageId:sub(11)
+                table.insert(State.flatItems, { type = "section_header", label = name })
+            elseif State.pages[pageId] then
+                local pg = State.pages[pageId]
+                table.insert(State.flatItems, {
+                    type = "page_link",
+                    label = pg.name,
+                    pageId = pageId,
+                })
+            end
         end
-    else
-        local pg = State.pages[entry]
-        if pg then
-            table.insert(State.flatItems, {
-                type = "page_link",
-                label = pg.name,
-                pageId = entry,
-            })
-        end
-    end
-end
         table.insert(State.flatItems, {
             type = "page_link",
             label = "Settings",
@@ -2392,6 +2748,11 @@ function doSelect()
         end
 
     elseif item.type == "button" then
+        if item._loading then
+            playSound("error")
+            showToast(item.label .. " is busy...")
+            return
+        end
         playSound("select")
         if item.callback then item.callback() end
         showToast(item.label .. " executed")
@@ -2442,6 +2803,13 @@ function doSelect()
                 renderView()
             end
         end)
+
+    elseif item.type == "image_card" then
+        -- Keyboard select triggers the first button if available
+        playSound("select")
+        if item.cardButtons and item.cardButtons[1] and item.cardButtons[1].callback then
+            item.cardButtons[1].callback()
+        end
     end
 end
 
@@ -2519,8 +2887,36 @@ local _cursorConn = nil
 local _savedMouseBehavior = nil
 local _savedMouseIcon = nil
 
-local function unlockCursor() end
-local function restoreCursor() end
+local function unlockCursor()
+    -- Save current state and free the cursor for mouse mode
+    if not _savedMouseBehavior then
+        _savedMouseBehavior = UIS.MouseBehavior
+        _savedMouseIcon = UIS.MouseIconEnabled
+    end
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
+    UIS.MouseIconEnabled = true
+    
+    -- Keep cursor free while mouse mode is on (game tries to re-lock every frame)
+    if _cursorConn then _cursorConn:Disconnect() end
+    _cursorConn = RS.Heartbeat:Connect(function()
+        if State.visible and State.mouseMode then
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
+            UIS.MouseIconEnabled = true
+        end
+    end)
+end
+
+local function restoreCursor()
+    -- Stop overriding cursor
+    if _cursorConn then _cursorConn:Disconnect(); _cursorConn = nil end
+    -- Restore to what it was before mouse mode
+    if _savedMouseBehavior then
+        UIS.MouseBehavior = _savedMouseBehavior
+        UIS.MouseIconEnabled = _savedMouseIcon
+        _savedMouseBehavior = nil
+        _savedMouseIcon = nil
+    end
+end
 
 local function enableMouseMode()
     if State.mouseMode then return end  -- already on
@@ -3886,9 +4282,21 @@ function Library:CreateWindow(title, version)
                     type = "button",
                     label = label,
                     callback = callback,
+                    _loading = false,
                 }
                 table.insert(sec.elements, el)
-                return el
+                return {
+                    SetLoading = function(_, loading)
+                        el._loading = loading
+                        if State.visible then renderView() end
+                    end,
+                    IsLoading = function(_) return el._loading end,
+                    SetCallback = function(_, cb) el.callback = cb end,
+                    SetLabel = function(_, text)
+                        el.label = text
+                        if State.visible then renderView() end
+                    end,
+                }
             end
 
             function Section:CreateTextbox(label, placeholder, callback)
@@ -3898,6 +4306,7 @@ function Library:CreateWindow(title, version)
                     placeholder = placeholder or "Type here...",
                     value = "",
                     callback = callback,
+                    _liveCallback = nil,
                 }
                 table.insert(sec.elements, el)
 
@@ -3907,6 +4316,10 @@ function Library:CreateWindow(title, version)
                         if State.visible then renderView() end
                     end,
                     Get = function(_) return el.value end,
+                    -- Set a callback that fires on every keystroke (live search etc.)
+                    OnChange = function(_, cb)
+                        el._liveCallback = cb
+                    end,
                 }
             end
 
@@ -4000,24 +4413,362 @@ function Library:CreateWindow(title, version)
                 return el
             end
 
+            -- ═══ Section:Clear() — remove all elements from this section ═══
+            function Section:Clear()
+                sec.elements = {}
+                if State.visible then renderView() end
+            end
+
+            -- ═══ Section:CreateImageCard(imageUrl, title, buttons) ═══
+            -- buttons = { {label="Run", callback=fn}, {label="Save", callback=fn} }
+            function Section:CreateImageCard(imageUrl, cardTitle, buttons, options)
+                options = options or {}
+                local el = {
+                    type = "image_card",
+                    label = cardTitle or "Card",
+                    imageUrl = imageUrl or "",
+                    cardTitle = cardTitle or "Untitled",
+                    cardSubtitle = options.subtitle or nil,
+                    cardBadges = options.badges or {},
+                    cardButtons = buttons or {},
+                    _height = options.height or H_IMAGECARD,
+                    _uiRefs = {},
+                }
+                table.insert(sec.elements, el)
+
+                return {
+                    Update = function(_, data)
+                        if data.imageUrl ~= nil then el.imageUrl = data.imageUrl end
+                        if data.title ~= nil then el.cardTitle = data.title; el.label = data.title end
+                        if data.subtitle ~= nil then el.cardSubtitle = data.subtitle end
+                        if data.badges ~= nil then el.cardBadges = data.badges end
+                        if data.buttons ~= nil then el.cardButtons = data.buttons end
+                        if State.visible then renderView() end
+                    end,
+                    GetElement = function(_) return el end,
+                    Remove = function(_)
+                        for i, e in ipairs(sec.elements) do
+                            if e == el then table.remove(sec.elements, i); break end
+                        end
+                        if State.visible then renderView() end
+                    end,
+                }
+            end
+
+            -- ═══ Section:CreateSpinner(text) ═══
+            function Section:CreateSpinner(text)
+                local el = {
+                    type = "spinner",
+                    label = text or "Loading...",
+                }
+                table.insert(sec.elements, el)
+                return {
+                    SetText = function(_, t)
+                        el.label = t
+                        if State.visible then renderView() end
+                    end,
+                    Remove = function(_)
+                        for i, e in ipairs(sec.elements) do
+                            if e == el then table.remove(sec.elements, i); break end
+                        end
+                        if State.visible then renderView() end
+                    end,
+                }
+            end
+
+            -- ═══ Section:CreateBadge(label, color) ═══
+            function Section:CreateBadge(badgeLabel, badgeColor)
+                local el = {
+                    type = "badge",
+                    label = badgeLabel or "TAG",
+                    badgeColor = badgeColor or nil,
+                }
+                table.insert(sec.elements, el)
+                return {
+                    SetLabel = function(_, t)
+                        el.label = t
+                        if State.visible then renderView() end
+                    end,
+                    SetColor = function(_, col)
+                        el.badgeColor = col
+                        if State.visible then renderView() end
+                    end,
+                    Remove = function(_)
+                        for i, e in ipairs(sec.elements) do
+                            if e == el then table.remove(sec.elements, i); break end
+                        end
+                        if State.visible then renderView() end
+                    end,
+                }
+            end
+
+            -- ═══ Section:CreateScrollGrid(cellSize, options) ═══
+            -- Returns a grid container that can have cards added to it
+            function Section:CreateScrollGrid(cellSize, options)
+                options = options or {}
+                local el = {
+                    type = "scroll_grid",
+                    label = "grid",
+                    _cellSize = cellSize or 120,
+                    _height = options.height or H_SCROLLGRID,
+                    _gridScroll = nil,
+                    _gridLayout = nil,
+                    _gridContainer = nil,
+                    _gridCards = {},
+                }
+                table.insert(sec.elements, el)
+
+                local gridAPI = {}
+
+                -- Add a card to the grid (returns card handle)
+                function gridAPI:AddCard(imageUrl, title, buttons, cardOptions)
+                    cardOptions = cardOptions or {}
+                    local gridScroll = el._gridScroll
+                    if not gridScroll or not gridScroll.Parent then return nil end
+
+                    local c = ct()
+                    local cellW = el._cellSize or 120
+                    local cellH = cellW + 30
+
+                    local card = makeFrame(gridScroll, {
+                        Size = UDim2.new(0, cellW, 0, cellH),
+                        BackgroundColor3 = c.bgLight,
+                        BackgroundTransparency = 0.15,
+                        ZIndex = 30,
+                    })
+                    addCorner(card, 5)
+                    local cardStroke = addStroke(card, c.inputBorder, 1, 0.55)
+
+                    -- Thumbnail
+                    if imageUrl and imageUrl ~= "" then
+                        local img = Instance.new("ImageLabel")
+                        img.Size = UDim2.new(1, -8, 0, cellW - 12)
+                        img.Position = UDim2.new(0, 4, 0, 4)
+                        img.BackgroundColor3 = c.inputBg
+                        img.BackgroundTransparency = 0.2
+                        img.Image = imageUrl
+                        img.ScaleType = Enum.ScaleType.Crop
+                        img.ZIndex = 31
+                        img.Parent = card
+                        addCorner(img, 3)
+                    else
+                        local ph = makeFrame(card, {
+                            Size = UDim2.new(1, -8, 0, cellW - 12),
+                            Position = UDim2.new(0, 4, 0, 4),
+                            BackgroundColor3 = c.inputBg,
+                            BackgroundTransparency = 0.2,
+                            ZIndex = 31,
+                        })
+                        addCorner(ph, 3)
+                        makeLabel(ph, {
+                            Size = UDim2.new(1, 0, 1, 0),
+                            TextSize = 22,
+                            TextColor3 = c.accentDim,
+                            Text = "◆",
+                            ZIndex = 32,
+                        })
+                    end
+
+                    -- Title
+                    local tLbl = makeLabel(card, {
+                        Size = UDim2.new(1, -8, 0, 14),
+                        Position = UDim2.new(0, 4, 0, cellW - 6),
+                        TextSize = 9,
+                        TextColor3 = c.accent,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
+                        Text = title or "Untitled",
+                        ZIndex = 32,
+                        Font = Enum.Font.GothamBold,
+                    })
+
+                    -- Buttons row at bottom of card
+                    if buttons and #buttons > 0 then
+                        local btnX = 4
+                        for bi, bDef in ipairs(buttons) do
+                            if bi > 2 then break end
+                            local bW = math.floor((cellW - 12) / math.min(#buttons, 2))
+                            local isFirst = (bi == 1)
+
+                            local btn = Instance.new("TextButton")
+                            btn.Size = UDim2.new(0, bW, 0, 14)
+                            btn.Position = UDim2.new(0, btnX, 1, -18)
+                            btn.BackgroundColor3 = isFirst and c.glow or c.bgLight
+                            btn.BackgroundTransparency = isFirst and 0.4 or 0.15
+                            btn.Text = ""
+                            btn.ZIndex = 33
+                            btn.AutoButtonColor = false
+                            btn.Active = true
+                            btn.Parent = card
+                            addCorner(btn, 3)
+
+                            makeLabel(btn, {
+                                Size = UDim2.new(1, 0, 1, 0),
+                                TextSize = 8,
+                                TextColor3 = isFirst and c.accent or c.accentDim,
+                                Text = string.upper(bDef.label or "Action"),
+                                ZIndex = 34,
+                                Font = Enum.Font.GothamBold,
+                            })
+
+                            btn.Activated:Connect(function()
+                                playSound("select")
+                                if bDef.callback then bDef.callback() end
+                            end)
+                            btn.MouseEnter:Connect(function()
+                                quickTween(cardStroke, 0.1, { Color = c.glow, Transparency = 0.2 })
+                            end)
+                            btn.MouseLeave:Connect(function()
+                                quickTween(cardStroke, 0.15, { Color = c.inputBorder, Transparency = 0.55 })
+                            end)
+
+                            btnX = btnX + bW + 4
+                        end
+                    end
+
+                    -- Badge overlays on card
+                    if cardOptions.badges and #cardOptions.badges > 0 then
+                        local bx = 6
+                        for _, badge in ipairs(cardOptions.badges) do
+                            local bText = badge.label or "TAG"
+                            local bColor = badge.color or c.glow
+                            local bW = #bText * 5 + 10
+                            local badgeFr = makeFrame(card, {
+                                Size = UDim2.new(0, bW, 0, 12),
+                                Position = UDim2.new(0, bx, 0, cellW - 18),
+                                BackgroundColor3 = bColor,
+                                BackgroundTransparency = 0.35,
+                                ZIndex = 35,
+                            })
+                            addCorner(badgeFr, 3)
+                            makeLabel(badgeFr, {
+                                Size = UDim2.new(1, 0, 1, 0),
+                                TextSize = 7,
+                                TextColor3 = Color3.new(1, 1, 1),
+                                Text = string.upper(bText),
+                                ZIndex = 36,
+                                Font = Enum.Font.GothamBold,
+                            })
+                            bx = bx + bW + 3
+                        end
+                    end
+
+                    -- Hover glow
+                    card.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseMovement then
+                            quickTween(cardStroke, 0.1, { Color = c.border, Transparency = 0.2 })
+                        end
+                    end)
+                    card.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseMovement then
+                            quickTween(cardStroke, 0.15, { Color = c.inputBorder, Transparency = 0.55 })
+                        end
+                    end)
+
+                    local cardHandle = {
+                        _frame = card,
+                        _titleLbl = tLbl,
+                        Remove = function(self)
+                            if card and card.Parent then card:Destroy() end
+                            for i, ch in ipairs(el._gridCards) do
+                                if ch == self then table.remove(el._gridCards, i); break end
+                            end
+                        end,
+                        UpdateTitle = function(_, t)
+                            if tLbl and tLbl.Parent then tLbl.Text = t or "" end
+                        end,
+                    }
+                    table.insert(el._gridCards, cardHandle)
+                    return cardHandle
+                end
+
+                -- Clear all cards from the grid
+                function gridAPI:ClearCards()
+                    for _, ch in ipairs(el._gridCards) do
+                        if ch._frame and ch._frame.Parent then ch._frame:Destroy() end
+                    end
+                    el._gridCards = {}
+                end
+
+                -- Get the raw ScrollingFrame for advanced usage
+                function gridAPI:GetScrollFrame()
+                    return el._gridScroll
+                end
+
+                function gridAPI:SetHeight(h)
+                    el._height = h
+                    if State.visible then renderView() end
+                end
+
+                return gridAPI
+            end
+
+            -- ═══ Section:CreateDividerLabel(text) ═══
+            function Section:CreateDividerLabel(text)
+                local el = {
+                    type = "divider_label",
+                    label = text or "──────",
+                }
+                table.insert(sec.elements, el)
+                return {
+                    SetText = function(_, t)
+                        el.label = t
+                        if State.visible then renderView() end
+                    end,
+                    Remove = function(_)
+                        for i, e in ipairs(sec.elements) do
+                            if e == el then table.remove(sec.elements, i); break end
+                        end
+                        if State.visible then renderView() end
+                    end,
+                }
+            end
+
             return Section
+        end
+
+        -- ═══ Page:Refresh() — re-render this page in-place if it's active ═══
+        function Page:Refresh()
+            if State.visible and State.currentView == pageId then
+                renderView()
+            end
+        end
+
+        -- Get this page's ID for external reference
+        function Page:GetId()
+            return pageId
         end
 
         return Page
     end
-function Window:CreateHomeDivider()
-    table.insert(_myPageOrder, { __type = "divider" })
-    if State.activeTab == _myTabIdx then
-        State.pageOrder = _myPageOrder
-    end
-end
 
-function Window:CreateHomeSection(label)
-    table.insert(_myPageOrder, { __type = "section", label = label })
-    if State.activeTab == _myTabIdx then
-        State.pageOrder = _myPageOrder
+    -- Insert a visual divider line in the home menu page list
+    function Window:CreateHomeDivider()
+        local marker = "__divider_" .. tostring(#_myPageOrder + 1)
+        table.insert(_myPageOrder, marker)
+        if State.activeTab == _myTabIdx then
+            State.pageOrder = _myPageOrder
+        end
     end
-end
+
+    -- Insert a section header label in the home menu page list
+    function Window:CreateHomeSection(name)
+        local marker = "__section_" .. (name or "")
+        table.insert(_myPageOrder, marker)
+        if State.activeTab == _myTabIdx then
+            State.pageOrder = _myPageOrder
+        end
+    end
+
+    -- Insert a visual divider line in the home menu page list
+    function Window:CreatePageDivider()
+        local marker = "__divider_" .. tostring(#_myPageOrder)
+        table.insert(_myPageOrder, marker)
+        if State.activeTab == _myTabIdx then
+            State.pageOrder = _myPageOrder
+        end
+    end
+
     function Window:Toggle()
         toggleMenu(not State.visible)
     end
